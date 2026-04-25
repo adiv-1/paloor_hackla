@@ -12,8 +12,13 @@ from assets.router import (
 )
 from linked_accounts import router as accounts_router, init_accounts_db
 from health_router import health_router
+from chat.router import router as chat_router
+from chat.cohort_router import router as cohort_router
+from chat.websocket import chat_websocket
+from memory.router import router as memory_router
+from speech import router as speech_router
 
-app = FastAPI(title="Paloor API", version="0.2.0")
+app = FastAPI(title="Paloor API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,11 +36,17 @@ app.include_router(document_router)
 app.include_router(search_router)
 app.include_router(accounts_router)
 app.include_router(health_router)
+app.include_router(chat_router)
+app.include_router(cohort_router)
+app.include_router(memory_router)
+app.include_router(speech_router)
+
+# WebSocket endpoint for real-time chat
+app.add_api_websocket_route("/ws/chat", chat_websocket)
 
 
 @app.on_event("startup")
 def on_startup():
-    # Apply schema synchronously (fast).
     try:
         import os
         from bootstrap import apply_schema
@@ -55,6 +66,12 @@ def on_startup():
         import logging
         logging.getLogger(__name__).warning(f"Accounts DB init failed: {e}")
     try:
+        from chat.service import seed_default_groups
+        seed_default_groups()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Group seeding failed: {e}")
+    try:
         from assets.service import restore_from_disk
         restore_from_disk()
     except Exception as e:
@@ -64,4 +81,4 @@ def on_startup():
 
 @app.get("/")
 def health():
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": "0.3.0"}
