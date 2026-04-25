@@ -4,9 +4,19 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 
+function getNextRoute(user: any): string {
+  if (user?.email !== "admin" && user?.email_verified === false) {
+    return "/verify-email";
+  }
+  if (user?.profile_completed === false) {
+    return "/profile-setup";
+  }
+  return "/dashboard";
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login, register } = useAuth();
+  const { login, register, user: authUser } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,8 +40,20 @@ export default function LoginPage() {
     if (err) {
       setError(err);
     } else {
-      router.push("/");
+      // Read the user from localStorage since state may not have updated yet
+      const savedUser = localStorage.getItem("paloor_user");
+      const u = savedUser ? JSON.parse(savedUser) : null;
+      router.push(getNextRoute(u));
     }
+  };
+
+  const handleDemo = async () => {
+    setError(null);
+    setSubmitting(true);
+    const err = await login("admin", "admin");
+    setSubmitting(false);
+    if (err) setError(err);
+    else router.push("/dashboard");
   };
 
   return (
@@ -48,7 +70,7 @@ export default function LoginPage() {
         </h1>
         <p className="text-sm text-muted-foreground mb-6">
           {mode === "login"
-            ? "Enter your credentials to continue."
+            ? "Enter your credentials or use demo mode."
             : "Set up your account to get started."}
         </p>
 
@@ -79,7 +101,7 @@ export default function LoginPage() {
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={mode === "register" ? "you@example.com" : "you@example.com"}
+              placeholder={mode === "register" ? "you@example.com" : "admin"}
               className="w-full px-3 py-2.5 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -89,7 +111,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === "register" ? "4+ characters" : "••••••••"}
+              placeholder={mode === "register" ? "4+ characters" : "admin"}
               className="w-full px-3 py-2.5 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -105,6 +127,16 @@ export default function LoginPage() {
                 : "Create Account"}
           </button>
         </form>
+
+        {mode === "login" && (
+          <button
+            onClick={handleDemo}
+            disabled={submitting}
+            className="w-full mt-3 py-2.5 text-sm text-muted-foreground hover:text-foreground border border-border hover:bg-accent/50 transition-colors disabled:opacity-50"
+          >
+            Use Demo Mode
+          </button>
+        )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           {mode === "login" ? (
@@ -135,6 +167,15 @@ export default function LoginPage() {
             </>
           )}
         </p>
+
+        <div className="mt-8 pt-6 border-t border-border/50 text-center">
+          <a
+            href="/admin/login"
+            className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          >
+            Paloor staff? Admin portal →
+          </a>
+        </div>
       </div>
     </div>
   );
