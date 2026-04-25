@@ -1,0 +1,21 @@
+{
+  "version": "53.0.0",
+  "files": {
+    "ca3408df7a8c229d31f5623504876240e789f99bcca8da2cc0617ccdb76da778": {
+      "displayName": "PaloorFrontendStack-dev Template",
+      "source": {
+        "path": "PaloorFrontendStack-dev.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "749625536013-us-east-2-0175ebd1": {
+          "bucketName": "cdk-hnb659fds-assets-749625536013-us-east-2",
+          "objectKey": "ca3408df7a8c229d31f5623504876240e789f99bcca8da2cc0617ccdb76da778.json",
+          "region": "us-east-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::749625536013:role/cdk-hnb659fds-file-publishing-role-749625536013-us-east-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

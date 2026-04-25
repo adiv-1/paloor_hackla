@@ -1,0 +1,132 @@
+{
+ "Parameters": {
+  "FrontendRepository": {
+   "Type": "String",
+   "Default": "https://github.com/Paloor/paloor_frontend",
+   "Description": "Git repository URL for the frontend app."
+  },
+  "GitHubPersonalAccessToken": {
+   "Type": "String",
+   "Description": "GitHub Personal Access Token used by Amplify to connect to the repository.",
+   "NoEcho": true
+  },
+  "FrontendBranch": {
+   "Type": "String",
+   "Default": "main",
+   "Description": "Git branch to deploy."
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Resources": {
+  "FrontendAmplifyApp": {
+   "Type": "AWS::Amplify::App",
+   "Properties": {
+    "AccessToken": {
+     "Ref": "GitHubPersonalAccessToken"
+    },
+    "BuildSpec": "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - npm ci\n    build:\n      commands:\n        - npm run build\n  artifacts:\n    baseDirectory: .next\n    files:\n      - '**/*'\n  cache:\n    paths:\n      - node_modules/**/*",
+    "EnableBranchAutoDeletion": true,
+    "EnvironmentVariables": [
+     {
+      "Name": "NEXT_PUBLIC_API_URL",
+      "Value": "http://localhost:8000"
+     }
+    ],
+    "Name": "paloor-frontend-dev",
+    "Platform": "WEB_COMPUTE",
+    "Repository": {
+     "Ref": "FrontendRepository"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PaloorFrontendStack-dev/FrontendAmplifyApp"
+   }
+  },
+  "FrontendMainBranch": {
+   "Type": "AWS::Amplify::Branch",
+   "Properties": {
+    "AppId": {
+     "Fn::GetAtt": [
+      "FrontendAmplifyApp",
+      "AppId"
+     ]
+    },
+    "BranchName": {
+     "Ref": "FrontendBranch"
+    },
+    "EnableAutoBuild": true,
+    "Framework": "Next.js - SSR",
+    "Stage": "PRODUCTION"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PaloorFrontendStack-dev/FrontendMainBranch"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/yXKQQ6CMBBA0bOwb0dsiK6VA2j0AGQsbRygQ9NOJYZwd0Nc/bf4BkxzhrrCJWvbj3qiF6xPQTuq1vMdEwYnLilccochTuS/sLaeLzHuwzUh2/e281YkFtkUz72DIR8+xsDxBHU1ZCKdCgsFB49/f58EuA93AAAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PaloorFrontendStack-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "AmplifyAppId": {
+   "Description": "Amplify app id for frontend.",
+   "Value": {
+    "Fn::GetAtt": [
+     "FrontendAmplifyApp",
+     "AppId"
+    ]
+   }
+  },
+  "AmplifyDefaultDomain": {
+   "Description": "Default Amplify domain. URL format: https://<branch>.<domain>",
+   "Value": {
+    "Fn::GetAtt": [
+     "FrontendAmplifyApp",
+     "DefaultDomain"
+    ]
+   }
+  },
+  "AmplifyBranchName": {
+   "Description": "Amplify branch deployed for frontend.",
+   "Value": {
+    "Ref": "FrontendBranch"
+   }
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

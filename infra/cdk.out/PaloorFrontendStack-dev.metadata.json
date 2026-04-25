@@ -1,0 +1,68 @@
+{
+  "/PaloorFrontendStack-dev/FrontendRepository": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendRepository"
+    }
+  ],
+  "/PaloorFrontendStack-dev/GitHubPersonalAccessToken": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "GitHubPersonalAccessToken"
+    }
+  ],
+  "/PaloorFrontendStack-dev/FrontendBranch": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBranch"
+    }
+  ],
+  "/PaloorFrontendStack-dev/FrontendAmplifyApp": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendAmplifyApp"
+    }
+  ],
+  "/PaloorFrontendStack-dev/FrontendMainBranch": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendMainBranch"
+    }
+  ],
+  "/PaloorFrontendStack-dev/AmplifyAppId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AmplifyAppId"
+    }
+  ],
+  "/PaloorFrontendStack-dev/AmplifyDefaultDomain": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AmplifyDefaultDomain"
+    }
+  ],
+  "/PaloorFrontendStack-dev/AmplifyBranchName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AmplifyBranchName"
+    }
+  ],
+  "/PaloorFrontendStack-dev/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/PaloorFrontendStack-dev/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/PaloorFrontendStack-dev/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ]
+}
