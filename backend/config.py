@@ -15,6 +15,11 @@ except Exception:
 
 
 class Settings(BaseSettings):
+    """Application configuration loaded from environment variables.
+    
+    In production, sensitive values are fetched from AWS Secrets Manager.
+    Locally, values are loaded from .env for convenience.
+    """
     app_name: str = "Paloor"
     debug: bool = True
     cors_origins: list[str] = ["http://localhost:3000"]
