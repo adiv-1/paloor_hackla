@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 function getNextRoute(user: any): string {
   if (user?.email !== "admin" && user?.email_verified === false) {
@@ -58,6 +59,9 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm p-6">
         <div className="inline-block mb-8">
           <span className="font-serif text-xl font-semibold tracking-wide">

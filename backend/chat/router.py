@@ -120,6 +120,8 @@ class EphemeralAskRequest(BaseModel):
     context: str = ""          # section name / description for system prompt
     abstraction_level: str = ""
     assistant_mode: str = "quick_help"
+    image_b64: Optional[str] = None         # optional page screenshot, base64 (no data: prefix)
+    image_format: Optional[str] = "png"     # png | jpeg | webp | gif
 
 
 class AiPreferencesRequest(BaseModel):
@@ -160,6 +162,8 @@ async def ephemeral_ask(req: EphemeralAskRequest, user: UserInfo = Depends(get_c
                 section_context=req.context,
                 abstraction_level=req.abstraction_level,
                 assistant_mode=req.assistant_mode,
+                image_b64=req.image_b64,
+                image_format=req.image_format or "png",
             ):
                 full_response += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"

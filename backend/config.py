@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Auth
     jwt_secret_key: str = "paloor-dev-secret-key-change-in-production"
 
+    # ElevenLabs (voice)
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"  # default: Bella, warm/friendly
+    elevenlabs_model_id: str = "eleven_turbo_v2_5"
+
     class Config:
         env_file = ".env"
         extra = "ignore"
@@ -81,6 +86,9 @@ if _aws_secrets:
         "DATABASE_URL",
         "UPLOAD_BUCKET",
         "AWS_REGION",
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_MODEL_ID",
     )
     # Allow local dev to keep its own DATABASE_URL even when secrets are loaded.
     _local_db = os.getenv("PALOOR_LOCAL_DB", "").lower() in ("1", "true", "yes")

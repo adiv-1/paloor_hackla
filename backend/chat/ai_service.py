@@ -507,8 +507,16 @@ async def stream_ai_response(
                                     decision = analysis_result.get("decision", "HOLD")
                                     confidence = analysis_result.get("confidence", "MEDIUM")
                                     duration = analysis_result.get("duration_secs", 0)
+                                    meta = analysis_result.get("metadata") or {}
+                                    if isinstance(meta, str):
+                                        try:
+                                            meta = json.loads(meta)
+                                        except Exception:
+                                            meta = {}
+                                    agent_breakdown = meta.get("agent_breakdown") or []
+                                    pm_metrics = meta.get("pm_metrics") or {}
 
-                                    yield f"{ANALYSIS_PREFIX}{json.dumps({'type': 'analysis_complete', 'analysis_id': analysis_id, 'ticker': analysis_ticker, 'decision': decision, 'confidence': confidence})}"
+                                    yield f"{ANALYSIS_PREFIX}{json.dumps({'type': 'analysis_complete', 'analysis_id': analysis_id, 'ticker': analysis_ticker, 'decision': decision, 'confidence': confidence, 'agents': agent_breakdown, 'metrics': pm_metrics, 'duration_seconds': duration})}"
 
                                     result = {
                                         "analysis_id": analysis_id,
@@ -517,6 +525,8 @@ async def stream_ai_response(
                                         "confidence": confidence,
                                         "summary": summary,
                                         "duration_seconds": duration,
+                                        "agents": agent_breakdown,
+                                        "metrics": pm_metrics,
                                         "note": "Full analysis with all agent reports is available at /api/analysis/" + analysis_id,
                                     }
                                 except Exception as e:
@@ -666,8 +676,16 @@ async def stream_ai_response(
                                     decision = analysis_result.get("decision", "HOLD")
                                     confidence = analysis_result.get("confidence", "MEDIUM")
                                     duration = analysis_result.get("duration_secs", 0)
+                                    meta = analysis_result.get("metadata") or {}
+                                    if isinstance(meta, str):
+                                        try:
+                                            meta = json.loads(meta)
+                                        except Exception:
+                                            meta = {}
+                                    agent_breakdown = meta.get("agent_breakdown") or []
+                                    pm_metrics = meta.get("pm_metrics") or {}
 
-                                    yield f"{ANALYSIS_PREFIX}{json.dumps({'type': 'analysis_complete', 'analysis_id': analysis_id, 'ticker': analysis_ticker, 'decision': decision, 'confidence': confidence})}"
+                                    yield f"{ANALYSIS_PREFIX}{json.dumps({'type': 'analysis_complete', 'analysis_id': analysis_id, 'ticker': analysis_ticker, 'decision': decision, 'confidence': confidence, 'agents': agent_breakdown, 'metrics': pm_metrics, 'duration_seconds': duration})}"
 
                                     result = {
                                         "analysis_id": analysis_id,
@@ -676,6 +694,8 @@ async def stream_ai_response(
                                         "confidence": confidence,
                                         "summary": summary,
                                         "duration_seconds": duration,
+                                        "agents": agent_breakdown,
+                                        "metrics": pm_metrics,
                                         "note": "Full analysis available at /api/analysis/" + analysis_id,
                                     }
                                 except Exception as e:
@@ -739,10 +759,13 @@ async def stream_ai_response_ephemeral(
     section_context: str = "",
     abstraction_level: str = "",
     assistant_mode: str = "quick_help",
+    image_b64: Optional[str] = None,
+    image_format: str = "png",
 ) -> AsyncGenerator[str, None]:
     """
     Stream an AI response for the info-popover feature.
     Uses the user's financial context but does NOT save anything.
+    Optionally accepts a base64-encoded screenshot for visual grounding.
     """
     try:
         client = _get_bedrock_client()
@@ -763,8 +786,41 @@ async def stream_ai_response_ephemeral(
     )
 
     system_text = f"{base_prompt}\n\n{runtime_instruction}" if runtime_instruction else base_prompt
-    messages = [{"role": "user", "content": question}]
-    converse_messages = [{"role": "user", "content": [{"text": question}]}]
+
+    # Build user content blocks. If we have an image, include it first so the
+    # model treats the question as being about what's on screen.
+    user_blocks: list[dict] = []
+    image_bytes: Optional[bytes] = None
+    if image_b64:
+        try:
+            import base64 as _b64
+            raw = image_b64
+            if "," in raw:
+                raw = raw.split(",", 1)[1]
+            image_bytes = _b64.b64decode(raw)
+        except Exception as e:
+            logger.warning("Failed to decode screenshot image: %s", e)
+            image_bytes = None
+    if image_bytes:
+        fmt = (image_format or "png").lower()
+        if fmt not in {"png", "jpeg", "jpg", "webp", "gif"}:
+            fmt = "png"
+        if fmt == "jpg":
+            fmt = "jpeg"
+        user_blocks.append({"image": {"format": fmt, "source": {"bytes": image_bytes}}})
+        user_blocks.append(
+            {
+                "text": (
+                    "The image above is a screenshot of the page the user is currently looking at. "
+                    "Use it to ground your answer in what they actually see.\n\n"
+                    f"Their question: {question}"
+                )
+            }
+        )
+    else:
+        user_blocks.append({"text": question})
+
+    converse_messages = [{"role": "user", "content": user_blocks}]
     system_list = [{"text": system_text}]
 
     for model_id in MODELS:

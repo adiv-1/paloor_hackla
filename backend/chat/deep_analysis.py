@@ -539,6 +539,10 @@ def run_analysis(
         # Generate executive summary
         summary = _generate_summary(ticker, pm_report, decision, confidence)
 
+        # Build per-agent breakdown + key metrics for chat preview / detail header
+        agent_breakdown = _build_agent_breakdown(completed_reports)
+        pm_metrics = _extract_pm_metrics(pm_report)
+
         duration = time.time() - start_time
         _update_analysis_status(
             analysis_id, "completed",
@@ -547,7 +551,11 @@ def run_analysis(
             summary=summary,
             decision=decision,
             confidence=confidence,
-            metadata=json.dumps({"charts": all_charts[:10]}),  # cap charts
+            metadata=json.dumps({
+                "charts": all_charts[:10],
+                "agent_breakdown": agent_breakdown,
+                "pm_metrics": pm_metrics,
+            }),
         )
 
         if progress_callback:
@@ -660,10 +668,120 @@ def _extract_confidence(report: str) -> str:
 def _generate_summary(ticker: str, pm_report: str, decision: str, confidence: str) -> str:
     """Generate a concise executive summary for the chat."""
     prompt = (
-        f"Summarize this portfolio manager's analysis of {ticker} into a concise "
-        f"3-4 sentence executive summary suitable for display in a chat interface. "
-        f"The decision is {decision} with {confidence} confidence.\n\n"
-        f"REPORT:\n{pm_report[:3000]}\n\n"
-        f"Write ONLY the summary, no headers or labels."
+        f"You are writing a chat reply for an investor who asked for a recommendation on {ticker}. "
+        f"The portfolio manager's verdict is {decision} with {confidence} confidence.\n\n"
+        f"Write a polished response (4-6 sentences, no headers, no bullet lists) that:\n"
+        f"  1. Opens with the recommendation in plain English (BUY/SELL/HOLD + confidence).\n"
+        f"  2. Names the 2-3 strongest drivers behind the decision (cite specific numbers if present).\n"
+        f"  3. Mentions the entry, target, and stop levels if the report contains them.\n"
+        f"  4. Calls out the single biggest risk to monitor.\n"
+        f"  5. Closes by inviting the user to review the full multi-agent report.\n\n"
+        f"Tone: confident, professional, conversational. Do not use markdown headers or bold.\n\n"
+        f"PORTFOLIO MANAGER REPORT:\n{pm_report[:3500]}\n\n"
+        f"Reply:"
     )
-    return _call_llm(prompt, max_tokens=300)
+    return _call_llm(prompt, max_tokens=420)
+
+
+# ---------------------------------------------------------------------------
+# Agent breakdown extraction (for chat preview + chips)
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+_OUTLOOK_PATTERNS = [
+    ("BULLISH",  _re.compile(r"\bOUTLOOK\s*[:\-]\s*BULLISH\b", _re.I)),
+    ("BEARISH",  _re.compile(r"\bOUTLOOK\s*[:\-]\s*BEARISH\b", _re.I)),
+    ("NEUTRAL",  _re.compile(r"\bOUTLOOK\s*[:\-]\s*NEUTRAL\b", _re.I)),
+]
+_RISK_PATTERN     = _re.compile(r"\bRISK\s*RATING\s*[:\-]\s*(VERY\s+HIGH|HIGH|MODERATE|LOW)\b", _re.I)
+_CONF_PATTERN     = _re.compile(r"\b(HIGH|MEDIUM|LOW)\s+CONFIDENCE\b", _re.I)
+_DECISION_PATTERN = _re.compile(r"\b(BUY|SELL|HOLD)\b")
+
+
+def _extract_agent_signal(agent_name: str, report: str) -> Optional[str]:
+    """Return a short tag (BULLISH/BEARISH/NEUTRAL/HIGH/MODERATE/BUY/SELL/HOLD) per agent."""
+    if not report:
+        return None
+    if agent_name == "risk_analyst":
+        m = _RISK_PATTERN.search(report)
+        return m.group(1).upper().replace(" ", "_") if m else None
+    if agent_name == "research_evaluator":
+        m = _CONF_PATTERN.search(report)
+        return f"{m.group(1).upper()} CONF" if m else None
+    if agent_name in ("trader", "portfolio_manager"):
+        m = _DECISION_PATTERN.search(report.upper())
+        return m.group(1) if m else None
+    for tag, pat in _OUTLOOK_PATTERNS:
+        if pat.search(report):
+            return tag
+    return None
+
+
+_HEADER_RE = _re.compile(r"^\s*(#+|\*+|-+|\d+\.)\s*", _re.M)
+
+
+def _extract_agent_headline(report: str, max_chars: int = 240) -> str:
+    """First non-trivial sentence(s) of the report, with markdown stripped."""
+    if not report:
+        return ""
+    text = report.strip()
+    # Drop the first line if it looks like a heading
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    body_lines: list[str] = []
+    for ln in lines:
+        # Skip pure heading / bold-only lines
+        stripped = _HEADER_RE.sub("", ln).strip()
+        stripped = stripped.strip("*_`")
+        if not stripped:
+            continue
+        # Skip section labels like "Decision" / "Rationale"
+        if len(stripped) <= 24 and stripped.endswith(":"):
+            continue
+        body_lines.append(stripped)
+        if sum(len(b) for b in body_lines) > max_chars + 80:
+            break
+    snippet = " ".join(body_lines)
+    snippet = _re.sub(r"\s+", " ", snippet).strip()
+    if len(snippet) > max_chars:
+        snippet = snippet[:max_chars].rsplit(" ", 1)[0] + "…"
+    return snippet
+
+
+def _build_agent_breakdown(completed_reports: dict[str, str]) -> list[dict]:
+    """Produce a structured per-agent summary preserving pipeline order."""
+    breakdown: list[dict] = []
+    for phase in AGENT_PIPELINE:
+        for agent in phase["agents"]:
+            name = agent["name"]
+            report = completed_reports.get(name, "") or ""
+            failed = report.startswith("(Agent failed")
+            breakdown.append({
+                "name":     name,
+                "label":    agent["label"],
+                "group":    phase["group"],
+                "status":   "failed" if failed else ("completed" if report else "pending"),
+                "signal":   None if failed else _extract_agent_signal(name, report),
+                "headline": "" if failed else _extract_agent_headline(report),
+            })
+    return breakdown
+
+
+def _extract_pm_metrics(pm_report: str) -> dict:
+    """Pull entry/target/stop/horizon/risk from the portfolio manager's report."""
+    if not pm_report:
+        return {}
+    out: dict[str, str] = {}
+    patterns = {
+        "entry":        _re.compile(r"\bEntry\s*[:\-]\s*\$?([\d,.]+)", _re.I),
+        "target":       _re.compile(r"\bTarget(?:\s+Price)?\s*[:\-]\s*\$?([\d,.]+)", _re.I),
+        "stop_loss":    _re.compile(r"\bStop[\s-]?Loss\s*[:\-]\s*\$?([\d,.]+)", _re.I),
+        "time_horizon": _re.compile(r"\bTime\s+Horizon\s*[:\-]\s*([A-Za-z0-9 ]{2,30})", _re.I),
+        "risk_rating":  _re.compile(r"\bRisk\s+Rating\s*[:\-]\s*([A-Z ]{3,15})", _re.I),
+    }
+    for key, pat in patterns.items():
+        m = pat.search(pm_report)
+        if m:
+            val = m.group(1).strip().rstrip(".,;:")
+            out[key] = val
+    return out

@@ -1,0 +1,88 @@
+import type { LessonModule } from "./types";
+
+export const DIVERSIFICATION_MODULE: LessonModule = {
+  id: "diversification",
+  title: "Diversification",
+  subtitle: "Why owning many things beats owning one",
+  level: "Beginner",
+  estimatedMinutes: 9,
+  requires: "returns",
+  unlocks: ["Correlation Matrix in Equities", "+7 days AI credits"],
+  blocks: [
+    {
+      id: "d1",
+      kind: "concept",
+      title: "Concentration is the hidden risk",
+      body: "If you own one company and it falls 50%, you fall 50%. If you own twenty companies, the chance that all of them fall together is much lower. That's the simple intuition behind diversification.",
+      visual: "allocation",
+      terms: ["diversification", "concentration", "risk"],
+    },
+    {
+      id: "d2",
+      kind: "interactive",
+      title: "Split your portfolio",
+      prompt: "Slide between 100% stocks and 100% bonds. Watch the expected return and risk shift together.",
+      widget: { type: "allocation-2", defaults: { stockPct: 60 } },
+      tutor: "This slider mixes stocks and bonds. Push it all the way to stocks: expected return goes up, but so does risk — your portfolio will swing harder. Slide back toward bonds: smoother ride, but lower long-term return. There's no single right answer; it depends on how long you have and how much volatility you can stomach. Try a 60/40 split — a classic starting point for many investors.",
+    },
+    {
+      id: "d3",
+      kind: "insight",
+      title: "Risk and return move together",
+      body: "More stocks means higher expected return — and higher swings. There's no free lunch on return. But there is a free lunch on risk, which we'll see next.",
+      terms: ["expected return", "risk", "stocks", "bonds"],
+    },
+    {
+      id: "d4",
+      kind: "concept",
+      title: "Correlation is the magic ingredient",
+      body: "When two assets move differently from each other (low correlation), combining them reduces risk without reducing return as much. This is the only true free lunch in finance.",
+      visual: "correlation",
+      terms: ["correlation", "assets", "risk"],
+    },
+    {
+      id: "d5",
+      kind: "interactive",
+      title: "Try different correlations",
+      prompt: "Drag the correlation slider. Notice how a 50/50 mix has lower risk when assets are uncorrelated.",
+      widget: { type: "correlation", defaults: { correlation: 0 } },
+      tutor: "Now this is the magic. Two assets with the same individual risk are mixed 50/50. Drag the correlation slider. When correlation is high — close to one — they move together and the combined risk barely drops. Bring correlation down to zero, or even negative, and the combined risk falls noticeably even though neither asset got safer. That's the only true free lunch in investing: combining things that don't move in sync.",
+    },
+    {
+      id: "d6",
+      kind: "insight",
+      title: "Lower correlation = smoother ride",
+      body: "Two assets with the same individual risk can produce a much lower combined risk if they don't move together. That's why a global, multi-asset portfolio feels calmer than any one piece.",
+      terms: ["correlation", "portfolio", "risk"],
+    },
+    {
+      id: "d7",
+      kind: "checkpoint",
+      concept: "Diversification, correlation, risk-adjusted returns",
+      question: "A friend says 'I just want to put everything in NVIDIA — it's been the best stock.' How would you push back without being preachy?",
+      keyIdeas: [
+        "Past performance doesn't guarantee future returns",
+        "Concentrated bets carry catastrophic downside risk",
+        "Diversification reduces risk without proportionally reducing return",
+      ],
+      placeholder: "What would you actually say to them?",
+    },
+    {
+      id: "d8",
+      kind: "sim",
+      title: "Concentrated vs diversified — 3 years",
+      prompt: "Same starting capital. Two strategies. Watch them play out.",
+      portfolios: [
+        { label: "All-in on one stock", preset: "concentrated" },
+        { label: "Diversified mix", preset: "diversified" },
+      ],
+      durationYears: 3,
+      startingValue: 10000,
+    },
+    {
+      id: "d9",
+      kind: "reward",
+      unlocks: ["Correlation Matrix unlocked in Equities", "+7 days AI credits earned"],
+    },
+  ],
+};

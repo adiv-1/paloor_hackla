@@ -40,13 +40,17 @@ import {
   GripVertical,
   Mic,
   MicOff,
+  Volume2,
+  Square,
   Image as ImageIcon,
   Pencil,
   BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useVoice } from "@/lib/useVoice";
 import ChatChart, { ChartCarousel } from "@/components/ChatChart";
 import type { ChartData } from "@/components/ChatChart";
+import AnalysisBreakdown from "@/components/AnalysisBreakdown";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const WS_URL = `${API.replace(/^http/, "ws")}/ws/chat`;
@@ -429,9 +433,8 @@ export default function ChatPage() {
   /* Initial load */
   useEffect(() => {
     loadConversations();
-    // Check speech-to-text availability (browser Web Speech API)
-    const hasSpeech = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
-    setSpeechAvailable(hasSpeech);
+    // Voice (ElevenLabs) availability is handled by useVoice; mic button shows whenever enabled.
+    setSpeechAvailable(true);
   }, [loadConversations]);
 
   /* ── Create a new AI chat and return it ── */
@@ -559,7 +562,15 @@ export default function ChatPage() {
         const decoder = new TextDecoder();
         let aiFullText = "";
         let collectedCharts: import("@/components/ChatChart").ChartData[] = [];
-        let collectedAnalysis: { analysis_id: string; ticker: string; decision: string; confidence: string } | null = null;
+        let collectedAnalysis: {
+          analysis_id: string;
+          ticker: string;
+          decision: string;
+          confidence: string;
+          agents?: Array<{ name: string; label: string; group: string; status: string; signal: string | null; headline: string }>;
+          metrics?: { entry?: string; target?: string; stop_loss?: string; time_horizon?: string; risk_rating?: string };
+          duration_seconds?: number;
+        } | null = null;
 
         if (reader) {
           let buffer = "";
@@ -591,7 +602,15 @@ export default function ChatPage() {
                   if (ae.type === "analysis_started") {
                     setToolStatuses((prev) => [...prev, `🔬 Running deep analysis on ${ae.ticker}...`]);
                   } else if (ae.type === "analysis_complete") {
-                    collectedAnalysis = { analysis_id: ae.analysis_id, ticker: ae.ticker, decision: ae.decision, confidence: ae.confidence };
+                    collectedAnalysis = {
+                      analysis_id: ae.analysis_id,
+                      ticker: ae.ticker,
+                      decision: ae.decision,
+                      confidence: ae.confidence,
+                      agents: ae.agents || [],
+                      metrics: ae.metrics || {},
+                      duration_seconds: ae.duration_seconds,
+                    };
                     setToolStatuses((prev) => [...prev, `✅ Analysis complete: ${ae.decision} (${ae.confidence} confidence)`]);
                   } else if (ae.type === "analysis_failed") {
                     setToolStatuses((prev) => [...prev, `❌ Analysis failed: ${ae.error}`]);
@@ -799,57 +818,74 @@ export default function ChatPage() {
     }
   };
 
-  /* ── Speech-to-text via browser Web Speech API ── */
-  const startRecording = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+  /* ── Speech-to-text via ElevenLabs (server-side) ── */
+  const voice = useVoice();
+  const [autoSpeakAI, setAutoSpeakAI] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    let finalTranscript = "";
-
-    recognition.onresult = (event: any) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interim = transcript;
-        }
-      }
-      setInputText((prev) => {
-        const base = prev.replace(/\u200B.*$/, ""); // remove interim marker
-        return base + finalTranscript + (interim ? "\u200B" + interim : "");
-      });
-    };
-
-    recognition.onerror = () => {
+  const startRecording = async () => {
+    if (!voice.enabled) return;
+    try {
+      await voice.startRecording();
+      setIsRecording(true);
+    } catch {
       setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      // Clean up: replace any interim markers and set final text
-      setInputText((prev) => prev.replace(/\u200B/g, "").trim());
-      inputRef.current?.focus();
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsRecording(true);
+    }
   };
 
-  const stopRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
+  const stopRecording = async () => {
+    if (!voice.recording) {
+      setIsRecording(false);
+      return;
     }
     setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      const text = await voice.stopAndTranscribe();
+      if (text) {
+        setInputText((prev) => (prev ? prev.trimEnd() + " " + text : text));
+        inputRef.current?.focus();
+      }
+    } finally {
+      setIsTranscribing(false);
+    }
   };
+
+  const speakMessage = async (msg: Message) => {
+    if (!voice.enabled) return;
+    if (speakingMsgId === msg.id) {
+      voice.stop();
+      setSpeakingMsgId(null);
+      return;
+    }
+    // Strip markdown lightly so TTS doesn't read syntax.
+    const plain = (msg.content || "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[*_#>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!plain) return;
+    setSpeakingMsgId(msg.id);
+    try {
+      await voice.speak(plain);
+    } finally {
+      setSpeakingMsgId(null);
+    }
+  };
+
+  /* Auto-speak the latest AI reply when toggle is on */
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoSpeakAI || isStreaming || !voice.enabled) return;
+    const last = messages[messages.length - 1];
+    if (!last || !last.is_ai_generated || !last.content) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    lastSpokenIdRef.current = last.id;
+    speakMessage(last);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, isStreaming, autoSpeakAI, voice.enabled]);
 
   /* ── Image attachment handling ── */
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1366,19 +1402,30 @@ export default function ChatPage() {
                           return charts?.length ? <ChartCarousel charts={charts} /> : null;
                         })()}
 
-                        {/* Deep Analysis link */}
+                        {/* Deep Analysis breakdown */}
                         {isAI && msg.metadata?.analysis?.analysis_id && (
-                          <a
-                            href={`/dashboard/analysis/${msg.metadata.analysis.analysis_id}`}
-                            className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20"
-                          >
-                            <BarChart3 className="h-3.5 w-3.5" />
-                            View Full {msg.metadata.analysis.ticker} Analysis →
-                          </a>
+                          <AnalysisBreakdown analysis={msg.metadata.analysis} />
                         )}
 
-                        <p className="text-[9px] text-muted-foreground mt-1 px-1">
+                        <p className="text-[9px] text-muted-foreground mt-1 px-1 flex items-center gap-2">
                           {formatTime(msg.created_at)}
+                          {isAI && voice.enabled && msg.content && (
+                            <button
+                              onClick={() => speakMessage(msg)}
+                              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+                              title={speakingMsgId === msg.id ? "Stop" : "Listen"}
+                            >
+                              {speakingMsgId === msg.id ? (
+                                <>
+                                  <Square className="h-2.5 w-2.5" /> Stop
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="h-2.5 w-2.5" /> Listen
+                                </>
+                              )}
+                            </button>
+                          )}
                         </p>
                       </div>
 
@@ -1527,17 +1574,31 @@ export default function ChatPage() {
                     <ImageIcon size={16} />
                   </button>
                 )}
-                {speechAvailable && (
+                {voice.enabled && (
                   <button
                     onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isTranscribing}
                     className={`p-2.5 rounded-xl transition-colors shrink-0 ${
                       isRecording
                         ? "bg-red-500 text-white animate-pulse hover:bg-red-600"
                         : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
-                    }`}
-                    title={isRecording ? "Stop recording" : "Voice input"}
+                    } disabled:opacity-50`}
+                    title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing…" : "Voice input (ElevenLabs)"}
                   >
-                    {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                    {isTranscribing ? <Loader2 size={16} className="animate-spin" /> : isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
+                )}
+                {voice.enabled && (
+                  <button
+                    onClick={() => setAutoSpeakAI((v) => !v)}
+                    className={`p-2.5 rounded-xl transition-colors shrink-0 ${
+                      autoSpeakAI
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                    title={autoSpeakAI ? "Auto-read AI replies: ON" : "Auto-read AI replies: OFF"}
+                  >
+                    <Volume2 size={16} />
                   </button>
                 )}
                 <button
@@ -1649,17 +1710,31 @@ export default function ChatPage() {
                 >
                   <ImageIcon size={16} />
                 </button>
-                {speechAvailable && (
+                {voice.enabled && (
                   <button
                     onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isTranscribing}
                     className={`p-2.5 rounded-xl transition-colors shrink-0 ${
                       isRecording
                         ? "bg-red-500 text-white animate-pulse hover:bg-red-600"
                         : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
-                    }`}
-                    title={isRecording ? "Stop recording" : "Voice input"}
+                    } disabled:opacity-50`}
+                    title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing…" : "Voice input (ElevenLabs)"}
                   >
-                    {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                    {isTranscribing ? <Loader2 size={16} className="animate-spin" /> : isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
+                )}
+                {voice.enabled && (
+                  <button
+                    onClick={() => setAutoSpeakAI((v) => !v)}
+                    className={`p-2.5 rounded-xl transition-colors shrink-0 ${
+                      autoSpeakAI
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                    title={autoSpeakAI ? "Auto-read AI replies: ON" : "Auto-read AI replies: OFF"}
+                  >
+                    <Volume2 size={16} />
                   </button>
                 )}
                 <button

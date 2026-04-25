@@ -25,3 +25,4 @@ lxml>=4.9
 html5lib>=1.1
 boto3>=1.35
 duckduckgo-search>=7.0
+httpx>=0.27

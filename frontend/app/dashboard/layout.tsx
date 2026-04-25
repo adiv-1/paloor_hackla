@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Onboarding } from "@/components/Onboarding";
 import { Spotlight } from "@/components/Spotlight";
+import { AIHelper } from "@/components/AIHelper";
 
 export default function DashboardLayout({
   children,
@@ -13,6 +14,7 @@ export default function DashboardLayout({
       <main className="min-w-0 w-full">{children}</main>
       <Onboarding />
       <Spotlight />
+      <AIHelper />
     </div>
   );
 }
