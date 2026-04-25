@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    restart: always
+    environment:
+      - POSTGRES_USER=paloor
+      - POSTGRES_PASSWORD=paloor_prod_2026
+      - POSTGRES_DB=paloor
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
+      - ./init_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql:ro
+
+volumes:
+  postgres_data:

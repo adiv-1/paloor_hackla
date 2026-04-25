@@ -22,7 +22,12 @@ class Settings(BaseSettings):
     """
     app_name: str = "Paloor"
     debug: bool = True
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
     upload_dir: str = "uploads"
     upload_bucket: str = ""
     aws_region: str = "us-east-1"
@@ -77,6 +82,10 @@ if _aws_secrets:
         "UPLOAD_BUCKET",
         "AWS_REGION",
     )
+    # Allow local dev to keep its own DATABASE_URL even when secrets are loaded.
+    _local_db = os.getenv("PALOOR_LOCAL_DB", "").lower() in ("1", "true", "yes")
     for _key in _OVERRIDES:
+        if _key == "DATABASE_URL" and _local_db:
+            continue
         if _key in _aws_secrets and _aws_secrets[_key]:
             setattr(settings, _key.lower(), _aws_secrets[_key])

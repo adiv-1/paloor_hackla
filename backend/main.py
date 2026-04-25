@@ -20,8 +20,9 @@ from memory.router import router as memory_router
 from speech import router as speech_router
 from equities.router import router as equities_v2_router
 from portfolio.router import router as portfolio_router
+from admin_router import router as admin_api_router
 
-app = FastAPI(title="Paloor API", version="0.4.0")
+app = FastAPI(title="Paloor API", version="0.9.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,6 +47,7 @@ app.include_router(memory_router)
 app.include_router(speech_router)
 app.include_router(equities_v2_router)
 app.include_router(portfolio_router)
+app.include_router(admin_api_router)
 
 app.add_api_websocket_route("/ws/chat", chat_websocket)
 
@@ -66,6 +68,13 @@ def on_startup():
         init_db()
     except Exception:
         pass
+    # Initialize admin database (admin users, CRM, revenue)
+    try:
+        from admin_auth import init_admin_db
+        init_admin_db()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Admin DB init failed: {e}")
     try:
         init_accounts_db()
     except Exception as e:
@@ -87,4 +96,4 @@ def on_startup():
 
 @app.get("/")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.9.0"}

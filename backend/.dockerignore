@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+*.db
+uploads/
+.git
+.gitignore
+docs/
+migrations/
+docker-compose.yml
+init_schema.sql
+migrate_data.py
+README.md
