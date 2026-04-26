@@ -314,6 +314,30 @@ def _extract_52w(db) -> dict[str, tuple[float | None, float | None]]:
     }
 
 
+def _extract_overview_text(db) -> dict[str, str]:
+    """Per-ticker lowercase searchable blob from AV OVERVIEW: description, sector, industry, country, address."""
+    import json as _json
+
+    rows = db.execute(
+        "SELECT ticker, data FROM av_fundamentals WHERE function_name = 'OVERVIEW'"
+    ).fetchall()
+
+    out: dict[str, str] = {}
+    keys = ("Description", "Sector", "Industry", "Country", "Address", "AssetType", "Name")
+    for row in rows:
+        ticker = row["ticker"]
+        raw = row["data"]
+        try:
+            data = _json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        parts = [str(data.get(k, "") or "") for k in keys]
+        out[ticker] = " ".join(parts).lower()
+    return out
+
+
 def screen_stocks(
     search: str | None = None,
     sector: str | None = None,
@@ -350,6 +374,7 @@ def screen_stocks(
         prior_fin = _extract_prior_year_metrics(db)
         latest_price = _extract_latest_price(db)
         high_low_52w = _extract_52w(db)
+        overview_text = _extract_overview_text(db)
 
         q = (search or "").strip().lower()
         sector_q = (sector or "").strip().lower()
@@ -364,8 +389,10 @@ def screen_stocks(
             sec = c["sector"] or ""
             ind = c["industry"] or ""
 
-            if q and q not in ticker.lower() and q not in (name or "").lower():
-                continue
+            if q:
+                searchable = f"{ticker} {name or ''} {sec} {ind} {overview_text.get(ticker, '')}".lower()
+                if q not in searchable:
+                    continue
             if sector_q and sec.lower() != sector_q:
                 continue
             if industry_q and ind.lower() != industry_q:

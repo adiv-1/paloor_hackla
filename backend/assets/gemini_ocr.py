@@ -10,7 +10,6 @@ No regex-based extraction.
 """
 from __future__ import annotations
 
-import base64
 import io
 import json
 import logging
@@ -869,18 +868,31 @@ def _detect_mime(content: bytes) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Gemini LLM extraction -- structured output via response_schema
+# Bedrock LLM extraction -- vision-capable models via Converse API
 # ---------------------------------------------------------------------------
 
-GEMINI_MODELS = [
-    "gemini-3-flash-preview",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
+BEDROCK_MODELS = [
+    "google.gemma-3-27b-it",                        # Vision + JSON, primary
+    "us.amazon.nova-lite-v1:0",                     # Vision + JSON, fallback
+    "us.meta.llama4-maverick-17b-instruct-v1:0",    # Vision-capable fallback
 ]
+
+# Models that don't support image input — used only for the text/PDF path.
+TEXT_ONLY_MODELS: set[str] = set()
 
 MAX_RETRIES = 2
 RETRY_DELAY = 3.0
+
+
+def _bedrock_image_format(content: bytes) -> Optional[str]:
+    """Map raw bytes to a Bedrock Converse image `format` string."""
+    mime = _detect_mime(content)
+    return {
+        "image/jpeg": "jpeg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+    }.get(mime)
 
 
 def _build_prompt(doc_key, schema, include_text=False, raw_text=""):
@@ -915,10 +927,13 @@ def _build_prompt(doc_key, schema, include_text=False, raw_text=""):
 async def extract_with_gemini(
     doc_key: str, content: bytes, raw_text: str
 ) -> Tuple[List[dict], Optional[str]]:
-    """Extract fields using Gemini LLM with structured output.
+    """Extract document fields using AWS Bedrock vision LLMs (Converse API).
 
-    For images  -> vision mode (send image bytes + schema)
-    For text/PDF -> text mode  (send raw text + schema)
+    Function name kept for backwards compatibility — implementation now uses
+    Bedrock (Claude Haiku 4.5 → Nova Lite → Llama 4 Maverick).
+
+    For images  -> vision content block + schema-aware prompt
+    For text/PDF -> raw text + schema-aware prompt
 
     Returns (fields_list, warning_or_none).
     """
@@ -931,68 +946,77 @@ async def extract_with_gemini(
             for k, v in schema["fields"].items()
         ]
 
-    if not settings.gemini_api_key:
-        logger.warning("GEMINI_API_KEY not set")
-        return empty_fields, "No AI key configured. Please set GEMINI_API_KEY."
+    try:
+        from chat.ai_service import _get_bedrock_client
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"Bedrock client import failed: {e}")
+        return empty_fields, "Bedrock not available."
 
     try:
-        from google import genai
-    except ImportError:
-        logger.warning("google-genai not installed")
-        return empty_fields, "AI library not available. Run: pip install google-genai"
+        client = _get_bedrock_client()
+    except Exception as e:
+        logger.warning(f"Bedrock client init failed: {e}")
+        return empty_fields, "Bedrock client unavailable. Check AWS credentials."
 
-    client = genai.Client(api_key=settings.gemini_api_key)
     is_img = _is_image(content)
+    img_format = _bedrock_image_format(content) if is_img else None
     model_cls = DOC_MODELS.get(doc_key)
-
-    if model_cls:
-        response_schema = model_cls.model_json_schema()
-    else:
-        response_schema = _GenericExtraction.model_json_schema()
-
-    prompt = _build_prompt(
-        doc_key, schema,
-        include_text=(is_img and bool(raw_text)),
-        raw_text=raw_text,
+    response_schema = (
+        model_cls.model_json_schema() if model_cls else _GenericExtraction.model_json_schema()
     )
 
-    for model_name in GEMINI_MODELS:
+    base_prompt = _build_prompt(
+        doc_key, schema,
+        include_text=(is_img and bool(raw_text)),
+        raw_text=raw_text if not is_img else raw_text,
+    )
+    # Append schema + strict JSON instruction so non-Claude models cooperate.
+    json_prompt = (
+        base_prompt
+        + "\n\nRespond with ONLY a single valid JSON object (no markdown, no prose) "
+          "matching this JSON schema:\n"
+        + json.dumps(response_schema)
+    )
+
+    # Build a Converse content list. Vision-capable models accept image blocks;
+    # if the format is unsupported (e.g. PDF), we fall back to text-only.
+    if is_img and img_format:
+        user_content = [
+            {"image": {"format": img_format, "source": {"bytes": content}}},
+            {"text": json_prompt},
+        ]
+    else:
+        text_prompt = _build_prompt(
+            doc_key, schema, include_text=True, raw_text=raw_text
+        ) + (
+            "\n\nRespond with ONLY a single valid JSON object (no markdown, no prose) "
+            "matching this JSON schema:\n" + json.dumps(response_schema)
+        )
+        user_content = [{"text": text_prompt}]
+
+    last_error: Optional[str] = None
+    for model_name in BEDROCK_MODELS:
+        # Skip text-only models when we're sending an image as the primary input.
+        if is_img and img_format and model_name in TEXT_ONLY_MODELS:
+            continue
         for attempt in range(MAX_RETRIES + 1):
             try:
-                if is_img:
-                    img_b64 = base64.b64encode(content).decode("utf-8")
-                    mime = _detect_mime(content)
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=[
-                            prompt,
-                            {"inline_data": {"mime_type": mime, "data": img_b64}},
-                        ],
-                        config={
-                            "response_mime_type": "application/json",
-                            "response_schema": response_schema,
-                        },
-                    )
-                else:
-                    text_prompt = _build_prompt(
-                        doc_key, schema, include_text=True, raw_text=raw_text
-                    )
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=text_prompt,
-                        config={
-                            "response_mime_type": "application/json",
-                            "response_schema": response_schema,
-                        },
-                    )
+                resp = client.converse(
+                    modelId=model_name,
+                    messages=[{"role": "user", "content": user_content}],
+                    inferenceConfig={"maxTokens": 1500, "temperature": 0.1},
+                )
+                blocks = resp.get("output", {}).get("message", {}).get("content", [])
+                result_text = "".join(
+                    b.get("text", "") for b in blocks if isinstance(b, dict)
+                ).strip()
 
-                result_text = response.text
-                logger.info(f"Gemini {model_name} raw response: {result_text[:500]}")
+                logger.info(f"Bedrock {model_name} raw response: {result_text[:500]}")
 
                 parsed = _safe_json_parse(result_text)
                 if not parsed:
-                    logger.warning(f"Gemini {model_name} returned unparseable response")
-                    continue
+                    logger.warning(f"Bedrock {model_name} returned unparseable response")
+                    break  # try next model
 
                 if model_cls and schema:
                     fields = _parsed_to_fields(parsed, schema)
@@ -1001,33 +1025,43 @@ async def extract_with_gemini(
 
                 warning = _validate_fields(doc_key, fields, schema)
                 filled = sum(1 for f in fields if f.get("value"))
-                logger.info(f"Gemini {model_name} extraction: {filled}/{len(fields)} fields")
+                logger.info(
+                    f"Bedrock {model_name} extraction: {filled}/{len(fields)} fields"
+                )
                 return fields, warning
 
             except Exception as e:
                 error_str = str(e)
-                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                    if attempt < MAX_RETRIES:
-                        delay = RETRY_DELAY * (attempt + 1)
-                        logger.info(f"Rate limited on {model_name}, retrying in {delay}s")
-                        time.sleep(delay)
-                        continue
-                    logger.warning(f"Rate limit exhausted for {model_name}")
+                last_error = error_str
+                throttled = (
+                    "ThrottlingException" in error_str
+                    or "TooManyRequests" in error_str
+                    or "429" in error_str
+                )
+                if throttled and attempt < MAX_RETRIES:
+                    delay = RETRY_DELAY * (attempt + 1)
+                    logger.info(f"Bedrock throttled on {model_name}, retrying in {delay}s")
+                    time.sleep(delay)
+                    continue
+                # Validation / model-not-found / vision-not-supported -> next model
+                if (
+                    "ValidationException" in error_str
+                    or "AccessDeniedException" in error_str
+                    or "ResourceNotFoundException" in error_str
+                ):
+                    logger.warning(f"Bedrock {model_name} unavailable: {error_str}")
                     break
-                elif "404" in error_str or "NOT_FOUND" in error_str:
-                    logger.warning(f"Model {model_name} not found, trying next")
-                    break
-                else:
-                    logger.error(f"Gemini {model_name} error: {e}")
-                    if attempt < MAX_RETRIES:
-                        time.sleep(RETRY_DELAY)
-                        continue
-                    break
+                logger.error(f"Bedrock {model_name} error: {e}")
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY)
+                    continue
+                break
 
-    logger.warning("All Gemini models failed -- returning empty fields")
+    logger.warning("All Bedrock models failed -- returning empty fields")
     return empty_fields, (
-        "Gemini extraction unavailable. All models returned errors. "
-        "Fields are empty -- please fill in manually or re-upload later."
+        "AI extraction unavailable right now"
+        + (f" ({last_error[:120]})" if last_error else "")
+        + ". Fields are empty -- please fill in manually or re-upload later."
     )
 
 

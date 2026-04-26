@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  TrendingUp,
   Loader2,
   Filter,
   RotateCcw,
@@ -12,6 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   Compass,
+  Wand2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { EquityTickerSearch } from "@/components/EquityTickerSearch";
 import { InfoPopover } from "@/components/InfoPopover";
@@ -19,13 +20,8 @@ import { useAuth } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const ABSTRACTION_LEVELS = [
-  { value: "beginner", label: "Beginner", desc: "Plain language, no jargon" },
-  { value: "retail", label: "Retail Investor", desc: "Practical and concise" },
-  { value: "pro", label: "Professional", desc: "Finance terminology" },
-  { value: "institutional", label: "Institutional", desc: "Deep quantitative" },
-  { value: "cfa", label: "CFA / Advanced", desc: "Full rigor" },
-] as const;
+// Abstraction level is now set at onboarding / in the profile page,
+// not on this page. Keep loading it for AI calls only.
 
 interface ScreenerItem {
   ticker: string;
@@ -330,12 +326,12 @@ export default function EquitiesPage() {
     { field: string; label: string }[]
   >([]);
   const [screenerExamples, setScreenerExamples] = useState<string[]>([]);
-  const [syncingPrices, setSyncingPrices] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncMessage] = useState<string | null>(null);
   const [assistantPrompt, setAssistantPrompt] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantNote, setAssistantNote] = useState<string | null>(null);
   const [abstractionLevel, setAbstractionLevel] = useState("retail");
+  const [mode, setMode] = useState<"ai" | "filter">("ai");
   const [recommendLoading, setRecommendLoading] = useState(false);
   const [recommendResult, setRecommendResult] = useState<{
     explanation: string;
@@ -380,6 +376,7 @@ export default function EquitiesPage() {
   }, [token]);
 
   function persistAbstractionLevel(level: string) {
+    // kept for backward compat — abstraction level now set via Onboarding/Profile
     setAbstractionLevel(level);
     const authToken = token || localStorage.getItem("paloor_token");
     if (!authToken) return;
@@ -392,6 +389,7 @@ export default function EquitiesPage() {
       body: JSON.stringify({ abstraction_level: level }),
     }).catch(() => {});
   }
+  void persistAbstractionLevel; // suppress unused-warning when not bound to UI
 
   async function recommendStocksForMe() {
     setRecommendLoading(true);
@@ -550,342 +548,263 @@ export default function EquitiesPage() {
           <h1 className="font-serif text-3xl text-foreground">Equity Discovery</h1>
           <InfoPopover
             title="Equity Discovery"
-            description="Search for individual stocks or use the screener to filter S&P 500 companies by financial metrics. Write expressions like 'pe < 15 AND roe > 12', or ask the AI to generate one from natural language."
+            description="Search for individual stocks or use the screener to filter S&P 500 companies. Two paths: ask the AI in plain English, or build a precise filter using real financial metrics."
             tips={[
-              "Type an expression and press Enter to screen instantly",
-              "Use 'Recommend for me' for AI-personalized stock criteria based on your profile",
-              "Click any ticker to dive into full company details",
-              "Change your AI level to adjust explanation depth",
+              "Search by ticker, company name, or any keyword in their description",
+              "Switch to 'Ask Paloor AI' to describe what you want in plain English",
+              "Use 'Find stocks for me' for picks tailored to your risk profile",
             ]}
             sectionContext="Equity Discovery"
             size="sm"
           />
         </div>
         <p className="text-muted-foreground text-sm max-w-lg">
-          Search any S&P 500 company, or screen by financial metrics and
-          AI-powered criteria.
+          Find S&P 500 companies that fit how you invest — by ticker, by metric, or by asking the AI.
         </p>
       </div>
 
       {/* Search Bar */}
-      <div className="mb-4 w-full max-w-[42rem]">
+      <div className="mb-10 w-full max-w-[42rem]">
         <EquityTickerSearch
           autoFocus
           className="w-full"
-          placeholder="Search by ticker or company name..."
+          placeholder="Search by ticker, company name, sector, or keyword (e.g. “semiconductor”)…"
           variant="hero"
         />
       </div>
 
-      {/* Browse link */}
-      <button
-        onClick={() => router.push("/dashboard/equities/stocks")}
-        className="mb-10 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        or browse all S&P 500 companies →
-      </button>
-
       {/* Discovery / Screener Panel */}
       <div className="w-full max-w-6xl border border-border/60 rounded-2xl bg-card shadow-sm overflow-hidden">
-        {/* Panel header */}
-        <div className="px-5 py-4 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-foreground/90">
-              Screen &amp; Filter
-            </h2>
+        {/* Mode tabs */}
+        <div className="px-5 pt-4 pb-0 border-b border-border/40 flex items-center gap-1">
+          <button
+            onClick={() => setMode("ai")}
+            className={`px-4 py-2.5 text-xs font-medium rounded-t-lg flex items-center gap-1.5 transition-colors ${
+              mode === "ai"
+                ? "bg-background border border-b-0 border-border/60 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Wand2 className="w-3.5 h-3.5" /> Ask Paloor AI
+          </button>
+          <button
+            onClick={() => setMode("filter")}
+            className={`px-4 py-2.5 text-xs font-medium rounded-t-lg flex items-center gap-1.5 transition-colors ${
+              mode === "filter"
+                ? "bg-background border border-b-0 border-border/60 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" /> Filter manually
+          </button>
+          <div className="ml-auto pb-2 flex items-center gap-2">
+            <InfoPopover
+              title="Equity Discovery"
+              description="Two ways to find stocks: ask the AI in plain English, or build a precise filter using real financial metrics. Both run against the same S&P 500 dataset."
+              tips={[
+                "Ask AI: 'profitable semiconductor companies with low debt'",
+                "Use 'Find stocks for me' to get personalized picks based on your risk profile and portfolio",
+                "Switch to 'Filter manually' for full control over expressions and thresholds",
+              ]}
+              sectionContext="Equity Discovery"
+              size="sm"
+            />
           </div>
         </div>
 
         <div className="p-5 space-y-4">
-          {/* ── AI Assistant (primary) ───────────────────────────────── */}
-          <div className="flex flex-col gap-2 md:flex-row">
-            <input
-              value={assistantPrompt}
-              onChange={(e) => setAssistantPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && assistantPrompt.trim()) {
-                  e.preventDefault();
-                  generateExpressionFromPrompt();
-                }
-              }}
-              placeholder="Describe what you're looking for: e.g. top semiconductor companies with high revenue growth..."
-              className="flex-1 px-4 py-3 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
-            />
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={generateExpressionFromPrompt}
-                disabled={assistantLoading || !assistantPrompt.trim()}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-3 text-xs rounded-lg border border-border bg-background hover:bg-muted/30 disabled:opacity-50 transition-colors"
-              >
-                {assistantLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                Generate
-              </button>
-              <InfoPopover
-                title="Generate Filter"
-                description="Translates your natural language query into a screener expression. The AI picks the best financial metrics and thresholds to match your intent, and automatically sets the sector filter if applicable."
-                tips={[
-                  "Mention sectors like 'semiconductor' or 'healthcare' for automatic filtering",
-                  "Be specific: 'profitable tech companies with low debt' works better than 'good stocks'",
-                  "The generated expression uses real metrics like P/E, ROE, revenue growth, etc.",
-                ]}
-                sectionContext="AI Screener"
-                size="sm"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={recommendStocksForMe}
-                disabled={recommendLoading}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-3 text-xs rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
-              >
-                {recommendLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Brain className="w-3.5 h-3.5" />
-                )}
-                Recommend for me
-              </button>
-              <InfoPopover
-                title="Recommend for Me"
-                description="Uses your full financial profile — risk tolerance, goals, existing portfolio, income, and uploaded documents — to design a personalized screener expression tailored to your situation."
-                tips={[
-                  "Works best after completing your profile and uploading financial documents",
-                  "Add context in the prompt: 'I want dividend income' or 'growth-focused'",
-                  "Suggested sectors appear as clickable buttons to further narrow results",
-                ]}
-                sectionContext="AI Recommendations"
-                size="sm"
-              />
-            </div>
-          </div>
+          {/* ───────── AI MODE ───────── */}
+          {mode === "ai" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-2">
+                  Tell me what kind of stocks you're looking for
+                </label>
+                <textarea
+                  value={assistantPrompt}
+                  onChange={(e) => setAssistantPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && assistantPrompt.trim()) {
+                      e.preventDefault();
+                      generateExpressionFromPrompt();
+                    }
+                  }}
+                  placeholder="e.g. profitable semiconductor companies with low debt and revenue growth above 15%"
+                  rows={2}
+                  className="w-full px-4 py-3 text-sm border border-border rounded-lg bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
+                />
+              </div>
 
-          {/* AI Level Selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              AI Level:
-            </span>
-            <div className="flex gap-1">
-              {ABSTRACTION_LEVELS.map((lvl) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button
-                  key={lvl.value}
                   type="button"
-                  onClick={() => persistAbstractionLevel(lvl.value)}
-                  className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors ${
-                    abstractionLevel === lvl.value
-                      ? "border-primary bg-primary/10 text-primary font-medium"
-                      : "border-transparent text-muted-foreground hover:bg-muted/20"
-                  }`}
-                  title={lvl.desc}
+                  onClick={generateExpressionFromPrompt}
+                  disabled={assistantLoading || !assistantPrompt.trim()}
+                  className="group flex items-start gap-3 px-4 py-3 text-left rounded-lg border border-border bg-background hover:bg-muted/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {lvl.label}
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    {assistantLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">
+                      Build a screen from this
+                    </div>
+                    <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                      Translates your prompt into a precise expression and runs it
+                    </div>
+                  </div>
                 </button>
-              ))}
-            </div>
-          </div>
 
-          {assistantNote && (
-            <div className="text-[11px] text-muted-foreground bg-muted/20 px-3 py-2 rounded-md">
-              {assistantNote}
-            </div>
-          )}
+                <button
+                  type="button"
+                  onClick={recommendStocksForMe}
+                  disabled={recommendLoading}
+                  className="group flex items-start gap-3 px-4 py-3 text-left rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    {recommendLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    ) : (
+                      <Brain className="w-4 h-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">
+                      Find stocks for me
+                    </div>
+                    <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                      Uses your risk profile, goals, and current portfolio to design a personalized screen
+                    </div>
+                  </div>
+                </button>
+              </div>
 
-          {recommendResult && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
-              <p className="text-xs text-foreground leading-relaxed">
-                {recommendResult.explanation}
-              </p>
-              {recommendResult.risk_note && (
-                <p className="text-[11px] text-muted-foreground italic">
-                  {recommendResult.risk_note}
-                </p>
-              )}
-              {recommendResult.sectors_to_consider.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Suggested sectors:
-                  </span>
-                  {recommendResult.sectors_to_consider.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() =>
-                        setFilters((f) => ({ ...f, sector: s }))
-                      }
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-primary/20 bg-background text-primary hover:bg-primary/10"
-                    >
-                      {s}
-                    </button>
-                  ))}
+              {assistantNote && (
+                <div className="text-[12px] text-foreground bg-muted/30 px-3 py-2 rounded-md border border-border/40">
+                  {assistantNote}
                 </div>
               )}
-              <p className="text-[9px] text-muted-foreground/60">
-                This is educational — not financial advice. Always do your own research.
-              </p>
+
+              {recommendResult && (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
+                  <p className="text-xs text-foreground leading-relaxed">
+                    {recommendResult.explanation}
+                  </p>
+                  {recommendResult.risk_note && (
+                    <p className="text-[11px] text-muted-foreground italic">
+                      {recommendResult.risk_note}
+                    </p>
+                  )}
+                  {recommendResult.sectors_to_consider.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Suggested sectors:
+                      </span>
+                      {recommendResult.sectors_to_consider.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setFilters((f) => ({ ...f, sector: s }))}
+                          className="text-[10px] px-2 py-0.5 rounded-full border border-primary/20 bg-background text-primary hover:bg-primary/10"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[9px] text-muted-foreground/60">
+                    This is educational — not financial advice. Always do your own research.
+                  </p>
+                </div>
+              )}
+
+              {filters.expression && (
+                <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                  <span className="text-[9px] uppercase tracking-wider mr-2">Active filter:</span>
+                  <code className="font-mono text-foreground">{filters.expression}</code>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── Expression filter (secondary) ────────────────────────── */}
-          <ExpressionInput
-            value={filters.expression}
-            onChange={(val) => setFilters((f) => ({ ...f, expression: val }))}
-            onSubmit={() => { setScreenerPage(1); runScreener(1); }}
-            fields={screenerFields}
-            examples={screenerExamples}
-          />
+          {/* ───────── FILTER MODE ───────── */}
+          {mode === "filter" && (
+            <div className="space-y-4">
+              <ExpressionInput
+                value={filters.expression}
+                onChange={(val) => setFilters((f) => ({ ...f, expression: val }))}
+                onSubmit={() => { setScreenerPage(1); runScreener(1); }}
+                fields={screenerFields}
+                examples={screenerExamples}
+              />
 
-          {/* Advanced Filters (collapsible) */}
-          <div className="border border-border/40 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowAdvancedFilters((v) => !v)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-medium hover:bg-muted/20 transition-colors"
-            >
-              {showAdvancedFilters ? (
-                <ChevronDown className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
-              )}
-              Advanced filters
-            </button>
-            {showAdvancedFilters && (
-              <div className="px-3 pb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                <input
-                  value={filters.search}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, search: e.target.value }))
-                  }
-                  placeholder="Ticker / company"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <select
-                  value={filters.sector}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, sector: e.target.value }))
-                  }
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
+              {/* Advanced Filters (collapsible) */}
+              <div className="border border-border/40 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters((v) => !v)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-medium hover:bg-muted/20 transition-colors"
                 >
-                  <option value="">All sectors</option>
-                  {sectors.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.industry}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, industry: e.target.value }))
-                  }
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                >
-                  <option value="">All industries</option>
-                  {industries.map((ind) => (
-                    <option key={ind} value={ind}>
-                      {ind}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={filters.minPe}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minPe: e.target.value }))
-                  }
-                  placeholder="Min P/E"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.maxPe}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, maxPe: e.target.value }))
-                  }
-                  placeholder="Max P/E"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minRoe}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minRoe: e.target.value }))
-                  }
-                  placeholder="Min ROE %"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.maxDebtToEquity}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, maxDebtToEquity: e.target.value }))
-                  }
-                  placeholder="Max Debt/Equity"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minCurrentRatio}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minCurrentRatio: e.target.value }))
-                  }
-                  placeholder="Min Current Ratio"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minMarketCapB}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minMarketCapB: e.target.value }))
-                  }
-                  placeholder="Min Market Cap (B)"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minRevenueB}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minRevenueB: e.target.value }))
-                  }
-                  placeholder="Min Revenue (B)"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minOperatingCfB}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minOperatingCfB: e.target.value }))
-                  }
-                  placeholder="Min Op Cash Flow (B)"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <input
-                  value={filters.minFreeCfB}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, minFreeCfB: e.target.value }))
-                  }
-                  placeholder="Min Free Cash Flow (B)"
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                >
-                  <option value="market_cap">Sort: Market Cap</option>
-                  <option value="pe">Sort: P/E</option>
-                  <option value="roe">Sort: ROE</option>
-                  <option value="revenue">Sort: Revenue</option>
-                  <option value="free_cash_flow">Sort: Free Cash Flow</option>
-                </select>
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-                  className="px-3 py-2 text-xs border border-border rounded-md bg-background"
-                >
-                  <option value="desc">Sort: Desc</option>
-                  <option value="asc">Sort: Asc</option>
-                </select>
+                  {showAdvancedFilters ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                  Advanced filters
+                </button>
+                {showAdvancedFilters && (
+                  <div className="px-3 pb-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                    <input
+                      value={filters.search}
+                      onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                      placeholder="Ticker / company / keyword"
+                      className="px-3 py-2 text-xs border border-border rounded-md bg-background"
+                    />
+                    <select
+                      value={filters.sector}
+                      onChange={(e) => setFilters((f) => ({ ...f, sector: e.target.value }))}
+                      className="px-3 py-2 text-xs border border-border rounded-md bg-background"
+                    >
+                      <option value="">All sectors</option>
+                      {sectors.map((s) => (<option key={s} value={s}>{s}</option>))}
+                    </select>
+                    <select
+                      value={filters.industry}
+                      onChange={(e) => setFilters((f) => ({ ...f, industry: e.target.value }))}
+                      className="px-3 py-2 text-xs border border-border rounded-md bg-background"
+                    >
+                      <option value="">All industries</option>
+                      {industries.map((ind) => (<option key={ind} value={ind}>{ind}</option>))}
+                    </select>
+                    <input value={filters.minPe} onChange={(e) => setFilters((f) => ({ ...f, minPe: e.target.value }))} placeholder="Min P/E" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.maxPe} onChange={(e) => setFilters((f) => ({ ...f, maxPe: e.target.value }))} placeholder="Max P/E" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minRoe} onChange={(e) => setFilters((f) => ({ ...f, minRoe: e.target.value }))} placeholder="Min ROE %" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.maxDebtToEquity} onChange={(e) => setFilters((f) => ({ ...f, maxDebtToEquity: e.target.value }))} placeholder="Max Debt/Equity" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minCurrentRatio} onChange={(e) => setFilters((f) => ({ ...f, minCurrentRatio: e.target.value }))} placeholder="Min Current Ratio" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minMarketCapB} onChange={(e) => setFilters((f) => ({ ...f, minMarketCapB: e.target.value }))} placeholder="Min Market Cap (B)" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minRevenueB} onChange={(e) => setFilters((f) => ({ ...f, minRevenueB: e.target.value }))} placeholder="Min Revenue (B)" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minOperatingCfB} onChange={(e) => setFilters((f) => ({ ...f, minOperatingCfB: e.target.value }))} placeholder="Min Op Cash Flow (B)" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <input value={filters.minFreeCfB} onChange={(e) => setFilters((f) => ({ ...f, minFreeCfB: e.target.value }))} placeholder="Min Free Cash Flow (B)" className="px-3 py-2 text-xs border border-border rounded-md bg-background" />
+                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-3 py-2 text-xs border border-border rounded-md bg-background">
+                      <option value="market_cap">Sort: Market Cap</option>
+                      <option value="pe">Sort: P/E</option>
+                      <option value="roe">Sort: ROE</option>
+                      <option value="revenue">Sort: Revenue</option>
+                      <option value="free_cash_flow">Sort: Free Cash Flow</option>
+                    </select>
+                    <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")} className="px-3 py-2 text-xs border border-border rounded-md bg-background">
+                      <option value="desc">Sort: Desc</option>
+                      <option value="asc">Sort: Asc</option>
+                    </select>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {screenerError && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -894,12 +813,9 @@ export default function EquitiesPage() {
           )}
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-1">
             <button
-              onClick={() => {
-                setScreenerPage(1);
-                runScreener(1);
-              }}
+              onClick={() => { setScreenerPage(1); runScreener(1); }}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Filter className="w-3.5 h-3.5" /> Run Screen
@@ -920,65 +836,28 @@ export default function EquitiesPage() {
             >
               <RotateCcw className="w-3.5 h-3.5" /> Reset
             </button>
-            <button
-              onClick={async () => {
-                setSyncingPrices(true);
-                setSyncMessage(null);
-                try {
-                  const res = await fetch(
-                    `${API}/api/equities/v2/fetch-prices-batch?missing_only=true&background=true`,
-                    { method: "POST" },
-                  );
-                  const data = await res.json().catch(() => ({}));
-                  if (res.ok) {
-                    setSyncMessage(
-                      data?.message || "Price sync started in background.",
-                    );
-                  } else {
-                    setSyncMessage(
-                      data?.detail || "Could not start price sync.",
-                    );
-                  }
-                } catch {
-                  setSyncMessage("Could not start price sync.");
-                } finally {
-                  setSyncingPrices(false);
-                }
-              }}
-              disabled={syncingPrices}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-border bg-background disabled:opacity-50 hover:bg-muted/20 transition-colors"
-            >
-              {syncingPrices ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <TrendingUp className="w-3.5 h-3.5" />
-              )}
-              Sync Prices
-            </button>
             {hasSearched && screener && (
               <span className="ml-auto text-xs text-muted-foreground">
                 {screener.total} matches
-                {screener.price_coverage
-                  ? ` · ${screener.price_coverage.with_price} with prices`
-                  : ""}
+                {screener.price_coverage ? ` · ${screener.price_coverage.with_price} with prices` : ""}
               </span>
             )}
           </div>
 
           {syncMessage && (
-            <div className="text-[11px] text-muted-foreground">
-              {syncMessage}
-            </div>
+            <div className="text-[11px] text-muted-foreground">{syncMessage}</div>
           )}
 
           {/* Results — only show after user runs a screen */}
           {!hasSearched ? (
             <div className="text-center py-12 text-muted-foreground">
               <Compass className="w-8 h-8 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Write an expression or set filters, then press <strong>Run Screen</strong></p>
-              <p className="text-xs mt-1 opacity-60">
-                Or ask the AI to build a screen for you
+              <p className="text-sm">
+                {mode === "ai"
+                  ? "Describe what you're looking for, then run the screen."
+                  : <>Set filters or write an expression, then press <strong>Run Screen</strong></>}
               </p>
+              <p className="text-xs mt-1 opacity-60">Results will appear here.</p>
             </div>
           ) : (
             <>

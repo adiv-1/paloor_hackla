@@ -8,29 +8,65 @@ import {
   User,
   TrendingUp,
   ArrowRight,
-  ChevronDown,
-  ChevronRight,
   GraduationCap,
+  MessageSquare,
 } from "lucide-react";
-import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { InfoPopover } from "@/components/InfoPopover";
 
-const PRIMARY_CARDS = [
+void BarChart3; // reserved for future cards
+
+const CARDS = [
+  {
+    href: "/dashboard/chat",
+    icon: MessageSquare,
+    title: "Chat",
+    description:
+      "Talk to Paloor AI about anything — your money, a stock, a concept, or your plan.",
+    cta: "Open chat",
+    info: {
+      description:
+        "A conversational AI tutor that knows your profile, your portfolio, and the rest of the platform. Ask anything in plain English.",
+      tips: [
+        "Voice or text — your call",
+        "Paste a chart or document and ask about it",
+        "Pulls from your assets and portfolio for grounded answers",
+      ],
+      sectionContext: "Chat",
+    },
+  },
+  {
+    href: "/dashboard/assets",
+    icon: FolderOpen,
+    title: "Assets",
+    description:
+      "Vehicles, property, investments — and the documents behind each one.",
+    cta: "Manage assets",
+    info: {
+      description:
+        "Organize everything you own and the documents that prove it. AI extracts key fields from anything you upload.",
+      tips: [
+        "Upload PDFs or images — AI reads them",
+        "Each asset tracks value, docs, and history",
+        "Linked accounts and personal docs live in Account",
+      ],
+      sectionContext: "Assets",
+    },
+  },
   {
     href: "/dashboard/learning",
     icon: GraduationCap,
     title: "Learning",
-    description: "Foundations-first finance education from money basics to portfolio theory.",
-    cta: "Open learning",
-    isNew: true,
+    description:
+      "Foundations-first finance lessons — from money basics to portfolio theory.",
+    cta: "Start learning",
     info: {
       description:
-        "This is the education track you want to demo right now. It teaches finance from first principles, keeps the language simple, and connects lessons to simulator tasks.",
+        "Bite-sized lessons that build on each other. Every chapter ends in a hands-on practice block in the simulator.",
       tips: [
-        "Start in Foundations if you want the easiest story",
-        "Each chapter builds toward a practical simulator task",
-        "Use this to show the educational progression in the demo",
+        "Start with Foundations if you're new",
+        "Each module unlocks a tool you'll actually use",
+        "Listen mode reads lessons aloud",
       ],
       sectionContext: "Learning",
     },
@@ -39,88 +75,70 @@ const PRIMARY_CARDS = [
     href: "/dashboard/simulator",
     icon: Activity,
     title: "Simulator",
-    description: "A risk-free trade simulator with synthetic market data and regime shifts.",
+    description:
+      "Risk-free trading sandbox with synthetic markets and regime shifts.",
     cta: "Open simulator",
-    isNew: true,
     info: {
       description:
-        "This is the practice layer of the product. Users apply what they learn in a fake-data market so they build intuition without risking real money.",
+        "Apply lessons in a fake market. Build intuition without risking real money.",
       tips: [
-        "Use fast-forward to show time compression in the demo",
-        "Show how stocks, bonds, and REITs behave differently",
-        "Tie simulator actions back to the lessons users just learned",
+        "Fast-forward to compress months into seconds",
+        "Switch regimes to feel bull, bear, and choppy markets",
+        "Tied directly to learning modules",
       ],
       sectionContext: "Simulator",
-    },
-  },
-];
-
-const OTHER_CARDS = [
-  {
-    href: "/dashboard/assets",
-    icon: FolderOpen,
-    title: "Assets",
-    description: "Manage vehicles, property, and their documents.",
-    cta: "Manage assets",
-    info: {
-      description:
-        "This is where you store and organize all your financial assets — real estate, vehicles, collectibles, and more. Upload documents like titles, deeds, or appraisals and our AI will automatically extract key details.",
-      tips: [
-        "Click 'Add Asset' to create a new entry",
-        "Upload PDFs or images — AI reads them automatically",
-        "Each asset tracks value, documents, and history",
-      ],
-      sectionContext: "Assets",
     },
   },
   {
     href: "/dashboard/equities",
     icon: TrendingUp,
     title: "Equities",
-    description: "S&P 500 analysis, regime detection, and trends.",
-    cta: "View markets",
-    isNew: true,
+    description:
+      "Find S&P 500 companies that fit how you invest — by metric, sector, or AI prompt.",
+    cta: "Discover stocks",
     info: {
       description:
-        "Track stock markets with AI-powered regime detection. See whether the market is in a bull, bear, or correction phase, view trend analysis, and research individual stocks.",
+        "Search any ticker, run a screener, or describe what you want and let AI build the filter for you.",
       tips: [
-        "Search any ticker to see detailed analysis",
-        "Regime detection shows market conditions",
-        "Use this data to inform your portfolio decisions",
+        "Try natural language: 'profitable semis with low debt'",
+        "'Find stocks for me' uses your risk profile",
+        "Click any ticker for fundamentals, charts, and analysis",
       ],
       sectionContext: "Equities",
     },
   },
   {
-    href: "/dashboard/portfolio",
-    icon: BarChart3,
-    title: "Portfolio",
-    description: "Efficient frontier analysis and optimization.",
-    cta: "Analyze portfolio",
+    href: "/dashboard/analysis",
+    icon: Activity,
+    title: "Analysis",
+    description:
+      "Deep multi-agent research reports with bull/bear/risk perspectives.",
+    cta: "View analysis",
     info: {
       description:
-        "Analyze your investment portfolio using modern portfolio theory. See your efficient frontier, optimal allocations, and risk-return tradeoffs. Backed by real historical data.",
+        "Multi-agent AI research: a bull, bear, fundamental, technical, and risk analyst all weigh in. You get a structured verdict + per-agent reasoning.",
       tips: [
-        "The efficient frontier shows optimal risk/return combos",
-        "Compare your current allocation to the optimal one",
-        "Adjust time horizon and risk tolerance to explore",
+        "Trigger from any equity page",
+        "Each agent's report is auditable",
+        "Highlight any line to ask follow-up questions",
       ],
-      sectionContext: "Portfolio",
+      sectionContext: "Analysis",
     },
   },
   {
     href: "/dashboard/account",
     icon: User,
     title: "Account",
-    description: "Personal documents, profile, and identity items.",
-    cta: "View account",
+    description:
+      "Profile, preferences, identity documents, and your risk assessment.",
+    cta: "Open account",
     info: {
       description:
-        "Manage your personal profile, upload identity documents (W-2s, tax returns, pay stubs), link bank and investment accounts, and complete your risk assessment.",
+        "Manage your profile, link bank/investment accounts, upload personal documents, and tune how the AI talks to you.",
       tips: [
-        "Complete your profile for personalized AI advice",
-        "Link accounts to see your full financial picture",
-        "Take the risk assessment to calibrate recommendations",
+        "Take the financial personality assessment for tailored AI",
+        "Set your AI level in Preferences",
+        "Linked accounts power portfolio analytics",
       ],
       sectionContext: "Account",
     },
@@ -129,151 +147,67 @@ const OTHER_CARDS = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [showOther, setShowOther] = useState(false);
+  const firstName = user?.name ? user.name.split(" ")[0] : null;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-6xl">
       <div className="mb-8">
         <div className="flex items-center gap-2">
           <h1 className="font-serif text-2xl tracking-tight">
-            {user?.name
-              ? `Welcome back, ${user.name.split(" ")[0]}`
-              : "Dashboard"}
+            {firstName ? `Welcome back, ${firstName}` : "Welcome to Paloor"}
           </h1>
           <InfoPopover
             title="Dashboard"
-            description="Your home base for managing wealth. See your progress, jump into any section, and track your financial health — all in one place."
+            description="Your home base. Jump into any section, or let the AI tutor walk you through how it all fits together."
             tips={[
-              "Complete the tasks in the tracker to set up your account",
-              "Click any card below to dive into that area",
-              "Your financial health score updates as you add data",
+              "Chat is always one click away — top-left",
+              "Learning + Simulator are the core education loop",
+              "Equities + Analysis are where you research real companies",
             ]}
             sectionContext="Dashboard"
           />
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          This dashboard is trimmed for the education-first demo. Learning and
-          Simulator are front and center, and the rest of the platform is tucked
-          away below.
+          Your learning platform and onboarding hub for becoming a smarter investor.
         </p>
       </div>
 
-      <div className="space-y-6 mb-8">
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-primary font-medium mb-2">
-            Demo Mode
-          </p>
-          <h2 className="font-serif text-2xl tracking-tight mb-2">
-            Show the learning loop, then show the practice loop.
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-3xl leading-relaxed">
-            Start with the Foundations-first learning experience, then move into the
-            simulator to show how Paloor turns concepts into intuition without using
-            real money or real market history.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          {PRIMARY_CARDS.map(
-            ({ href, icon: Icon, title, description, cta, isNew, info }) => (
-              <div
-                key={href}
-                className="group relative rounded-lg border border-border hover:bg-accent/50 hover:border-foreground/10 transition-all"
-              >
-                {isNew && (
-                  <span className="absolute top-3 right-10 text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-primary/5 text-primary border border-primary/20 z-10">
-                    Focus
-                  </span>
-                )}
-                <div className="absolute top-3 right-3 z-10">
-                  <InfoPopover
-                    title={title}
-                    description={info.description}
-                    tips={info.tips}
-                    sectionContext={info.sectionContext}
-                    size="sm"
-                  />
-                </div>
-                <Link href={href} className="block p-5">
-                  <Icon
-                    size={18}
-                    className="text-muted-foreground group-hover:text-foreground mb-3 transition-colors"
-                  />
-                  <h2 className="font-medium mb-1">{title}</h2>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {description}
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                    {cta}{" "}
-                    <ArrowRight
-                      size={11}
-                      className="group-hover:translate-x-0.5 transition-transform"
-                    />
-                  </span>
-                </Link>
-              </div>
-            ),
-          )}
-        </div>
-
-        <div className="rounded-lg border border-border overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowOther((prev) => !prev)}
-            className="w-full flex items-center gap-2 px-5 py-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {CARDS.map(({ href, icon: Icon, title, description, cta, info }) => (
+          <div
+            key={href}
+            className="group relative rounded-lg border border-border hover:bg-accent/40 hover:border-foreground/10 transition-all"
           >
-            {showOther ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <span className="font-medium">Other Platform Areas</span>
-            <span className="ml-auto text-xs text-muted-foreground">
-              Hidden for demo focus
-            </span>
-          </button>
-
-          {showOther && (
-            <div className="p-4 grid md:grid-cols-2 gap-4 border-t border-border bg-background">
-              {OTHER_CARDS.map(
-                ({ href, icon: Icon, title, description, cta, isNew, info }) => (
-                  <div
-                    key={href}
-                    className="group relative rounded-lg border border-border hover:bg-accent/50 hover:border-foreground/10 transition-all"
-                  >
-                    {isNew && (
-                      <span className="absolute top-3 right-10 text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-primary/5 text-primary border border-primary/20 z-10">
-                        New
-                      </span>
-                    )}
-                    <div className="absolute top-3 right-3 z-10">
-                      <InfoPopover
-                        title={title}
-                        description={info.description}
-                        tips={info.tips}
-                        sectionContext={info.sectionContext}
-                        size="sm"
-                      />
-                    </div>
-                    <Link href={href} className="block p-5">
-                      <Icon
-                        size={18}
-                        className="text-muted-foreground group-hover:text-foreground mb-3 transition-colors"
-                      />
-                      <h2 className="font-medium mb-1">{title}</h2>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {description}
-                      </p>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                        {cta}{" "}
-                        <ArrowRight
-                          size={11}
-                          className="group-hover:translate-x-0.5 transition-transform"
-                        />
-                      </span>
-                    </Link>
-                  </div>
-                ),
-              )}
+            <div className="absolute top-3 right-3 z-10">
+              <InfoPopover
+                title={title}
+                description={info.description}
+                tips={info.tips}
+                sectionContext={info.sectionContext}
+                size="sm"
+              />
             </div>
-          )}
-        </div>
+            <Link href={href} className="block p-5">
+              <div className="w-9 h-9 rounded-lg bg-muted/60 flex items-center justify-center mb-3 group-hover:bg-primary/10 transition-colors">
+                <Icon
+                  size={18}
+                  className="text-muted-foreground group-hover:text-primary transition-colors"
+                />
+              </div>
+              <h2 className="font-medium text-sm mb-1">{title}</h2>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-3 min-h-[2.5rem]">
+                {description}
+              </p>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                {cta}
+                <ArrowRight
+                  size={11}
+                  className="group-hover:translate-x-0.5 transition-transform"
+                />
+              </span>
+            </Link>
+          </div>
+        ))}
       </div>
     </div>
   );

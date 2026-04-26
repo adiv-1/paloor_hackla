@@ -146,6 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return err.detail || "Registration failed";
         }
         const data = await res.json();
+        // Brand-new account: clear any leftover onboarding flag so the
+        // walkthrough always shows for newly created users.
+        localStorage.removeItem("paloor_onboarded");
         localStorage.setItem("paloor_token", data.access_token);
         localStorage.setItem("paloor_user", JSON.stringify(data.user));
         setToken(data.access_token);

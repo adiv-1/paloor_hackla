@@ -432,10 +432,17 @@ export default function AccountPage() {
   const [linkingAccount, setLinkingAccount] = useState(false);
   const [institutionSearch, setInstitutionSearch] = useState("");
 
-  // Active tab
+  // Active tab — supports ?tab=assessment deep-link from onboarding etc.
   const [activeTab, setActiveTab] = useState<
     "profile" | "documents" | "preferences" | "assessment" | "accounts"
-  >("profile");
+  >(() => {
+    if (typeof window === "undefined") return "profile";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "assessment" || t === "documents" || t === "preferences" || t === "accounts" || t === "profile") {
+      return t;
+    }
+    return "profile";
+  });
 
   const loadDocs = async () => {
     const res = await fetch(`${API}/api/account/documents`);

@@ -31,71 +31,28 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const PRIMARY_NAV = [
-  {
-    href: "/dashboard/learning",
-    label: "Learning",
-    icon: GraduationCap,
-    badge: "Live" as const,
-  },
-  {
-    href: "/dashboard/simulator",
-    label: "Simulator",
-    icon: Activity,
-    badge: "Live" as const,
-  },
+const NAV: { href: string; label: string; icon: typeof BarChart3 }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { href: "/dashboard/chat", label: "Chat", icon: MessageSquare },
+  { href: "/dashboard/assets", label: "Assets", icon: FolderOpen },
+  { href: "/dashboard/learning", label: "Learning", icon: GraduationCap },
+  { href: "/dashboard/simulator", label: "Simulator", icon: Activity },
+  { href: "/dashboard/equities", label: "Equities", icon: TrendingUp },
+  { href: "/dashboard/analysis", label: "Analysis", icon: Activity },
+  { href: "/dashboard/account", label: "Account", icon: User },
 ];
 
-const OTHER_NAV = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: BarChart3,
-    badge: "Beta" as const,
-  },
-  { href: "/dashboard/assets", label: "Assets", icon: FolderOpen, badge: null },
-  {
-    href: "/dashboard/chat",
-    label: "Chat",
-    icon: MessageSquare,
-    badge: "Beta" as const,
-  },
-  {
-    href: "/dashboard/cohort",
-    label: "Cohorts",
-    icon: UserCheck,
-    badge: "Beta" as const,
-  },
-  {
-    href: "/dashboard/account",
-    label: "Account",
-    icon: User,
-    badge: "Beta" as const,
-  },
-  {
-    href: "/dashboard/equities",
-    label: "Equities",
-    icon: TrendingUp,
-    badge: "Beta" as const,
-  },
-  {
-    href: "/dashboard/analysis",
-    label: "Analysis",
-    icon: Activity,
-    badge: "Beta" as const,
-  },
-];
-
-const COMING_SOON: { label: string; icon: typeof BarChart3; badge: string; href?: string }[] = [
-  { label: "Portfolio", icon: BarChart3, badge: "Coming", href: "/dashboard/portfolio" },
-  { label: "Spending", icon: Wallet, badge: "Coming", href: "/dashboard/spending" },
-  { label: "Tax Planning", icon: Receipt, badge: "Coming" },
-  { label: "ETF Builder", icon: Layers, badge: "Coming" },
-  { label: "Paloor Invests", icon: Bot, badge: "Coming" },
-  { label: "Insurance", icon: Shield, badge: "Coming" },
-  { label: "Estate Planning", icon: Landmark, badge: "Coming" },
-  { label: "Crypto & Digital", icon: Bitcoin, badge: "Coming" },
-  { label: "Debt Management", icon: CreditCard, badge: "Coming" },
+const COMING_SOON: { label: string; icon: typeof BarChart3; href?: string }[] = [
+  { label: "Cohorts", icon: UserCheck, href: "/dashboard/cohort" },
+  { label: "Portfolio", icon: BarChart3, href: "/dashboard/portfolio" },
+  { label: "Spending", icon: Wallet, href: "/dashboard/spending" },
+  { label: "Tax Planning", icon: Receipt },
+  { label: "ETF Builder", icon: Layers },
+  { label: "Paloor Invests", icon: Bot },
+  { label: "Insurance", icon: Shield },
+  { label: "Estate Planning", icon: Landmark },
+  { label: "Crypto & Digital", icon: Bitcoin },
+  { label: "Debt Management", icon: CreditCard },
 ];
 
 export function Sidebar() {
@@ -104,12 +61,7 @@ export function Sidebar() {
   const [isAdmin] = useState(
     () => typeof window !== "undefined" && !!window.localStorage.getItem("paloor_admin_token"),
   );
-  const [showOther, setShowOther] = useState(false);
-
-  const otherActive = OTHER_NAV.some(
-    ({ href }) => pathname === href || (href !== "/dashboard" && pathname.startsWith(href)),
-  );
-  const otherOpen = showOther || otherActive;
+  const [showComingSoon, setShowComingSoon] = useState(false);
 
   const photoUrl = user?.photo_url ? `${API}${user.photo_url}` : null;
 
@@ -205,10 +157,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        <p className="px-3 mb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50">
-          Demo Focus
-        </p>
-        {PRIMARY_NAV.map(({ href, label, icon: Icon, badge }) => {
+        {NAV.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href ||
             (href !== "/dashboard" && pathname.startsWith(href));
@@ -224,9 +173,6 @@ export function Sidebar() {
             >
               <Icon size={16} />
               <span className="flex-1">{label}</span>
-              <span className="text-[8px] font-mono px-1 py-0.5 rounded border border-primary/20 text-primary bg-primary/5">
-                {badge}
-              </span>
             </Link>
           );
         })}
@@ -234,83 +180,42 @@ export function Sidebar() {
         <div className="pt-3 mt-3 border-t border-border">
           <button
             type="button"
-            onClick={() => setShowOther((prev) => !prev)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+            onClick={() => setShowComingSoon((prev) => !prev)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50 hover:text-foreground transition-colors"
           >
-            {otherOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <span className="flex-1 text-left">Other Features</span>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-border text-muted-foreground/60">
-              Hidden
-            </span>
+            {showComingSoon ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            <span className="flex-1 text-left">Coming Soon</span>
           </button>
 
-          {otherOpen && (
+          {showComingSoon && (
             <div className="mt-1 space-y-1">
-              {OTHER_NAV.map(({ href, label, icon: Icon, badge }) => {
-                const active =
-                  pathname === href ||
-                  (href !== "/dashboard" && pathname.startsWith(href));
+              {COMING_SOON.map(({ label, icon: Icon, href }) => {
+                const canClick = isAdmin && href;
+                const active = canClick && pathname.startsWith(href!);
+                const className = `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                  active
+                    ? "bg-accent text-foreground font-medium"
+                    : canClick
+                      ? "text-muted-foreground/50 hover:text-foreground hover:bg-accent/50 cursor-pointer"
+                      : "text-muted-foreground/50 cursor-default"
+                }`;
+                if (canClick) {
+                  return (
+                    <Link key={label} href={href!} className={className}>
+                      <Icon size={16} />
+                      <span className="flex-1">{label}</span>
+                    </Link>
+                  );
+                }
                 return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                      active
-                        ? "bg-accent text-foreground font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }`}
-                  >
+                  <div key={label} className={className}>
                     <Icon size={16} />
                     <span className="flex-1">{label}</span>
-                    {badge && (
-                      <span className="text-[8px] font-mono px-1 py-0.5 rounded border border-primary/20 text-primary bg-primary/5">
-                        {badge}
-                      </span>
-                    )}
-                  </Link>
+                  </div>
                 );
               })}
             </div>
           )}
-        </div>
-
-        <div className="pt-3 mt-3 border-t border-border">
-          <p className="px-3 mb-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50">
-            Coming Soon
-          </p>
-          {COMING_SOON.map(({ label, icon: Icon, badge, href }) => {
-            const canClick = isAdmin && href;
-            const active = canClick && pathname.startsWith(href!);
-            const className = `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-              active
-                ? "bg-accent text-foreground font-medium"
-                : canClick
-                  ? "text-muted-foreground/50 hover:text-foreground hover:bg-accent/50 cursor-pointer"
-                  : "text-muted-foreground/50 cursor-default"
-            }`;
-
-            if (canClick) {
-              return (
-                <Link key={label} href={href} className={className}>
-                  <Icon size={16} />
-                  <span className="flex-1">{label}</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-border text-muted-foreground/40">
-                    {badge}
-                  </span>
-                </Link>
-              );
-            }
-
-            return (
-              <div key={label} className={className}>
-                <Icon size={16} />
-                <span className="flex-1">{label}</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-border text-muted-foreground/40">
-                  {badge}
-                </span>
-              </div>
-            );
-          })}
         </div>
       </nav>
 

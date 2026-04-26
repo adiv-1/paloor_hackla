@@ -30,18 +30,30 @@ logger = logging.getLogger(__name__)
 
 AV_BASE = "https://www.alphavantage.co/query"
 
-# Rate limiter — premium tier is 75/min
-_last_request_time = 0.0
-_MIN_INTERVAL = 0.8  # 75 req/min (1 req per 0.8s to be safe)
+# Rate limiter — premium tier is 75/min. Thread-safe token bucket so parallel
+# workers can saturate the limit without ever exceeding it.
+import threading as _threading
+from collections import deque as _deque
+
+_MAX_PER_MIN = 75
+_WINDOW_SEC = 60.0
+_rate_lock = _threading.Lock()
+_request_times: "_deque[float]" = _deque()
 
 
 def _throttle():
-    global _last_request_time
-    now = time.time()
-    elapsed = now - _last_request_time
-    if elapsed < _MIN_INTERVAL:
-        time.sleep(_MIN_INTERVAL - elapsed)
-    _last_request_time = time.time()
+    """Block until issuing a request would stay within 75 req / 60 s."""
+    while True:
+        with _rate_lock:
+            now = time.time()
+            # drop timestamps older than the window
+            while _request_times and (now - _request_times[0]) >= _WINDOW_SEC:
+                _request_times.popleft()
+            if len(_request_times) < _MAX_PER_MIN:
+                _request_times.append(now)
+                return
+            wait = _WINDOW_SEC - (now - _request_times[0]) + 0.01
+        time.sleep(max(wait, 0.01))
 
 
 def _av_fetch(function: str, symbol: str, **extra_params) -> Optional[dict]:

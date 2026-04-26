@@ -236,7 +236,7 @@ export function AIHelper() {
         id="paloor-ai-helper-fab"
         onClick={() => setOpen(true)}
         title="AI Helper"
-        className="fixed z-[9990] bottom-5 right-5 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
+        className="fixed z-[9990] bottom-24 right-5 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition-transform flex items-center justify-center"
       >
         <Sparkles className="h-5 w-5" />
       </button>
@@ -247,7 +247,7 @@ export function AIHelper() {
   return (
     <div
       id="paloor-ai-helper-dock"
-      className="fixed z-[9990] bottom-5 right-5 w-[360px] max-w-[calc(100vw-1.5rem)] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      className="fixed z-[9990] bottom-24 right-5 w-[360px] max-w-[calc(100vw-1.5rem)] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
       style={{ height: 520 }}
     >
       {/* Header */}

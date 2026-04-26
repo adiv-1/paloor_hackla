@@ -26,15 +26,14 @@ from chat.models import get_conversation_summary, list_messages, insert_message
 
 logger = logging.getLogger(__name__)
 
-# AWS Bedrock model IDs — Llama 4 primary, Claude when available
+# AWS Bedrock model IDs — Gemma primary (LA Hacks Google challenge)
 MODELS = [
-    "us.meta.llama4-maverick-17b-instruct-v1:0",     # Primary — $0.24/$0.97, tool use (hybrid streaming)
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0",   # Fallback — streaming+tools (needs valid payment)
+    "google.gemma-3-27b-it",                         # Primary — Google challenge
+    "us.meta.llama4-maverick-17b-instruct-v1:0",     # Fallback — tool use (hybrid streaming)
     "us.amazon.nova-lite-v1:0",                      # Fallback — fast, cheap, streaming+tools
-    "google.gemma-3-27b-it",                         # No tool use, last resort
 ]
 
-# Models that support tool use via Converse API
+# Models that support tool use via Converse API (Gemma does NOT)
 _TOOL_CAPABLE_MODELS = {"anthropic", "meta.llama4", "amazon.nova"}
 # Models that support tool use in streaming mode (Llama 4 does NOT)
 _STREAMING_TOOL_MODELS = {"anthropic", "amazon.nova"}
@@ -61,6 +60,45 @@ TOOL_STATUS_PREFIX = "\x00TOOL:"
 CHART_DATA_PREFIX = "\x00CHART:"
 # Prefix marker for deep analysis events
 ANALYSIS_PREFIX = "\x00ANALYSIS:"
+
+# Heuristic: prompts that almost certainly need tool use (price lookups,
+# deep analysis, news, financials, technicals). When detected we skip
+# non-tool-capable models like Gemma so the request goes straight to
+# Llama / Nova which can actually invoke `alpha_vantage` or `deep_analysis`.
+_TOOL_INTENT_RE = re.compile(
+    r"\b("
+    r"should\s+i\s+(?:buy|sell|hold|invest)"
+    r"|buy\s+or\s+sell"
+    r"|(?:deep|full|comprehensive|detailed)\s+analysis"
+    r"|analyze\s+[a-z]{1,5}\b"
+    r"|run\s+(?:an?\s+)?analysis"
+    r"|invest(?:ment)?\s+(?:advice|recommendation)"
+    r"|good\s+investment"
+    r"|price\s+(?:of|target)"
+    r"|stock\s+price"
+    r"|latest\s+(?:news|earnings|filings?)"
+    r"|recent\s+news"
+    r"|(?:rsi|macd|sma|ema|bollinger|moving\s+average)"
+    r"|chart\s+(?:of|for)"
+    r"|fundamentals?\s+of"
+    r"|income\s+statement|balance\s+sheet|cash\s+flow"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _select_models(user_message: str) -> list[str]:
+    """Return models in preference order. If the prompt needs tools,
+    filter out models that don't support tool use (e.g. Gemma)."""
+    if user_message and _TOOL_INTENT_RE.search(user_message):
+        tool_models = [
+            m for m in MODELS
+            if any(p in m.lower() for p in _TOOL_CAPABLE_MODELS)
+        ]
+        if tool_models:
+            logger.info("Tool-intent detected; routing to tool-capable models: %s", tool_models)
+            return tool_models
+    return MODELS
 
 
 def _parse_text_tool_calls(text: str) -> list[dict]:
@@ -405,7 +443,8 @@ async def stream_ai_response(
     tool_config = {"tools": AV_TOOL_SPECS + [DEEP_ANALYSIS_TOOL]}
     MAX_TOOL_ROUNDS = 5
 
-    for model_id in MODELS:
+    candidate_models = _select_models(user_message)
+    for model_id in candidate_models:
         model_supports_tools = any(p in model_id.lower() for p in _TOOL_CAPABLE_MODELS)
         can_stream_tools = any(p in model_id.lower() for p in _STREAMING_TOOL_MODELS)
         for attempt in range(MAX_RETRIES + 1):
@@ -823,7 +862,7 @@ async def stream_ai_response_ephemeral(
     converse_messages = [{"role": "user", "content": user_blocks}]
     system_list = [{"text": system_text}]
 
-    for model_id in MODELS:
+    for model_id in _select_models(question):
         try:
             response = client.converse_stream(
                 modelId=model_id,
@@ -1079,7 +1118,7 @@ def generate_response(prompt: str, max_tokens: int = 512) -> Optional[str]:
     except Exception:
         return None
 
-    for model_id in MODELS:
+    for model_id in _select_models(prompt):
         for attempt in range(MAX_RETRIES + 1):
             try:
                 response = client.converse(

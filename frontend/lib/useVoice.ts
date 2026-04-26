@@ -7,6 +7,42 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 let _voiceEnabledCache: boolean | null = null;
 
+// Module-level audio ref so a global Stop button can halt playback started
+// from any hook instance.
+let _currentAudio: HTMLAudioElement | null = null;
+const _listeners = new Set<(p: boolean) => void>();
+let _playing = false;
+
+function _setPlaying(v: boolean) {
+  _playing = v;
+  _listeners.forEach((fn) => fn(v));
+}
+
+export function stopSpeaking() {
+  if (_currentAudio) {
+    try {
+      _currentAudio.pause();
+      _currentAudio.src = "";
+    } catch {
+      /* noop */
+    }
+    _currentAudio = null;
+  }
+  _setPlaying(false);
+}
+
+export function useIsSpeaking() {
+  const [v, setV] = useState(_playing);
+  useEffect(() => {
+    _listeners.add(setV);
+    setV(_playing);
+    return () => {
+      _listeners.delete(setV);
+    };
+  }, []);
+  return v;
+}
+
 /**
  * Browser-side wrapper around the backend ElevenLabs routes.
  * - speak(text): fetches audio/mpeg from /api/learn/voice/tts and plays it
@@ -37,11 +73,25 @@ export function useVoice() {
 
   const stop = useCallback(() => {
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch {
+        /* noop */
+      }
       audioRef.current = null;
     }
+    if (_currentAudio) {
+      try {
+        _currentAudio.pause();
+        _currentAudio.src = "";
+      } catch {
+        /* noop */
+      }
+      _currentAudio = null;
+    }
     setPlaying(false);
+    _setPlaying(false);
   }, []);
 
   const speak = useCallback(
@@ -55,21 +105,26 @@ export function useVoice() {
           body: JSON.stringify({ text }),
         });
         if (!res.ok) {
-          if (res.status === 503) _voiceEnabledCache = false, setEnabled(false);
+          if (res.status === 503) (_voiceEnabledCache = false), setEnabled(false);
           return;
         }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         audioRef.current = audio;
+        _currentAudio = audio;
         audio.onended = () => {
           setPlaying(false);
+          _setPlaying(false);
+          if (_currentAudio === audio) _currentAudio = null;
           URL.revokeObjectURL(url);
         };
         setPlaying(true);
+        _setPlaying(true);
         await audio.play();
       } catch {
         setPlaying(false);
+        _setPlaying(false);
       }
     },
     [token, stop],
