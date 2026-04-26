@@ -1,205 +1,201 @@
-# Paloor — AI-Native Personal Wealth Platform
+# Paloor — Your AI Finance Pal
 
-Paloor is a full-stack financial intelligence and organization platform built on AI. It combines asset tracking, financial analytics, AI-powered research, and education into a single coherent experience.
+> Learn finance from first principles, practice in a risk-free simulator, and research stocks with a multi-agent AI team — all in one place.
 
-## What We're Building
+Paloor makes personal finance approachable for people who feel locked out of the jargon. It pairs an AI tutor with a portfolio simulator and a deep-research engine so users can move from "what is a stock?" to running an 8-agent investment analysis without leaving the app.
 
-**Paloor** helps individuals and families:
-- **Organize** every asset they own (vehicles, property, investments) with structured document checklists
-- **Understand** their complete financial picture through health scoring and portfolio analytics
-- **Learn** financial foundations through an interactive education track
-- **Practice** investment strategy risk-free in a simulator
-- **Research** stocks and markets with AI-powered deep analysis
-- **Chat** with an AI assistant that understands their personal context and can execute financial research tasks
+Built for **LA Hacks 2026** — Google challenge track (Gemma 3 27B as the primary LLM) on the AWS Bedrock multi-model stack.
+
+---
+
+## The Three Pillars
+
+| Pillar | What it does |
+| --- | --- |
+| 📚 **LEARN** | Structured curriculum from "what is a stock?" to portfolio theory. Voice-first lessons (ElevenLabs TTS + STT), AI tutor explanations, progress tracking. |
+| 🎮 **PRACTICE** | Risk-free trading simulator on synthetic prices. Apply lessons immediately, make mistakes that don't cost real money. |
+| 🔬 **RESEARCH** | AI-powered stock discovery and deep analysis. Eight specialist agents (Market, Technical, Fundamentals, News, Bull/Bear, Trader, Risk, Portfolio Manager) collaborate on a BUY / SELL / HOLD verdict. |
+
+Plus an **always-on AI helper** — voice + text — that knows the user's age, income, risk tolerance, and goals.
+
+---
 
 ## Architecture
 
-### Tech Stack
-- **Backend**: FastAPI (Python), PostgreSQL, AWS Bedrock, Amazon Transcribe, Alpha Vantage API
-- **Frontend**: Next.js 16 (Turbopack), React, Tailwind CSS, shadcn
-- **Infrastructure**: AWS (S3, Secrets Manager, etc.)
+```
+┌──────────────┐      ┌───────────────┐      ┌─────────────────────────┐
+│  Next.js 16  │ HTTP │   FastAPI     │ ──▶  │ AWS Bedrock (us-east-1) │
+│  Turbopack   │  WS  │  (Python 3.10)│      │  • Gemma 3 27B (chat)   │
+│  Tailwind    │ ───▶ │  149 routes   │      │  • Llama 4 Maverick     │
+│  shadcn/ui   │      │               │      │  • Nova Lite            │
+└──────────────┘      └───────┬───────┘      └─────────────────────────┘
+                              │
+                ┌─────────────┼──────────────┬──────────────┐
+                ▼             ▼              ▼              ▼
+        ┌──────────────┐ ┌─────────┐ ┌──────────────┐ ┌──────────┐
+        │  PostgreSQL  │ │   S3    │ │ Alpha Vantage│ │ ElevenLabs│
+        │  (RDS or     │ │ uploads │ │ (equities)   │ │  TTS+STT  │
+        │   SQLite)    │ │         │ │              │ │           │
+        └──────────────┘ └─────────┘ └──────────────┘ └──────────┘
+```
 
-### Core Modules
+### Multi-Model Routing (the secret sauce)
 
-#### Backend
-- **auth**: JWT-based authentication, email verification, user profiles
-- **assets**: Asset organization with per-class document checklists (vehicles, property, investments, accounts)
-- **health**: Financial health scoring (0-100) based on document completeness, diversification, goals
-- **chat**: Private AI conversations powered by Bedrock with tool-calling (Alpha Vantage integration)
-- **memory**: Persistent memory system with embeddings for semantic recall across conversations
-- **cohort**: Group messaging for wealth-manager scenarios
-- **equities**: Alpha Vantage integration for stock research, fundamentals, financial statements, screener
-- **portfolio**: Efficient frontier solver and mock-price generator for portfolio optimization
-- **speech**: Amazon Transcribe wrapper for voice-to-text
+Different prompts go to different models based on intent:
 
-#### Frontend
-- **Landing** (`/`): Product overview and value proposition
-- **Auth** (`/login`, `/verify-email`, `/profile-setup`): Onboarding flow
-- **Dashboard** (`/dashboard`): Central hub with sidebar navigation
-  - **Assets** (`/assets`, `/assets/[key]`): Browse and manage asset classes
-  - **Account** (`/account`): Personal documents (DL, passport, IDs)
-  - **Health**: Financial health score visualization
-  - **Learning** (`/learning`): Interactive finance education from first principles
-  - **Simulator** (`/simulator`): Risk-free trading with synthetic market data
-  - **Chat** (`/chat`): Private AI conversation with streaming and tool output
-  - **Cohort** (`/cohort`): Group messaging
-  - **Equities** (`/equities`, `/equities/stocks/[ticker]`): Stock research and screener
-  - **Analysis** (`/analysis`, `/analysis/[id]`): Deep-analysis reports from multi-agent research
-  - **Portfolio** (`/portfolio`): Efficient-frontier visualization
+- **Plain Q&A** ("what is a P/E ratio?") → **Gemma 3 27B** (Google challenge primary)
+- **Tool-using prompts** ("should I buy MSFT?", "RSI for AAPL") → **Llama 4 Maverick** (supports Bedrock Converse `toolUse`)
+- **Image OCR** (uploaded statements, IDs) → **Gemma 3 27B vision** with Llama / Nova fallback
+- **Fast streaming** with tools → **Amazon Nova Lite**
+
+A heuristic regex (`_TOOL_INTENT_RE` in [backend/chat/ai_service.py](backend/chat/ai_service.py)) detects when a prompt needs tool execution and skips Gemma in favor of a tool-capable model. Plain conversational queries still hit Gemma so the Google challenge story stays intact.
+
+---
+
+## Tech Stack
+
+**Backend** — FastAPI · Python 3.10 · PostgreSQL (RDS) / SQLite fallback · AWS Bedrock Converse API · Alpha Vantage · ElevenLabs · Boto3
+**Frontend** — Next.js 16 (Turbopack) · React 19 · TypeScript · Tailwind CSS · shadcn/ui
+**Infra** — AWS CDK (TypeScript) · ECR + Fargate · RDS Postgres · S3 · Secrets Manager
+**AI** — Google Gemma 3 27B · Meta Llama 4 Maverick 17B · Amazon Nova Lite · ElevenLabs Bella (voice)
+
+---
+
+## Repository Layout
+
+```
+paloor_hackla/
+├── backend/                    FastAPI service (149 routes)
+│   ├── chat/                   AI chat, multi-model routing, deep analysis
+│   │   ├── ai_service.py       Bedrock orchestration + tool-intent routing
+│   │   ├── deep_analysis.py    8-agent investment analysis pipeline
+│   │   ├── av_tools.py         Alpha Vantage tool specs for Converse
+│   │   └── websocket.py        Real-time streaming chat
+│   ├── equities/               Stock data, screener, ratios, news, filings
+│   ├── assets/                 Document OCR via Bedrock vision
+│   ├── memory/                 Embedding-backed semantic recall
+│   ├── portfolio/              Efficient-frontier solver
+│   ├── speech.py               Voice (ElevenLabs)
+│   └── main.py                 FastAPI entrypoint
+├── frontend/                   Next.js 16 app
+│   ├── app/dashboard/          Authenticated surface
+│   │   ├── learning/           LEARN pillar — courses + voice tutor
+│   │   ├── simulator/          PRACTICE pillar — risk-free trading
+│   │   ├── equities/           RESEARCH pillar — discovery + deep analysis
+│   │   ├── analysis/           Multi-agent report viewer
+│   │   ├── chat/               AI conversations
+│   │   └── account/            Profile, AI prefs, assessment
+│   ├── components/             Shared UI (AIHelper, StopSpeakingButton, …)
+│   └── lib/                    Auth, voice, API client
+└── infra/                      AWS CDK stack
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- PostgreSQL 13+
-- AWS credentials (for Bedrock, S3, Transcribe, Secrets Manager)
+- AWS account with Bedrock model access (`google.gemma-3-27b-it`, `us.meta.llama4-maverick-17b-instruct-v1:0`, `us.amazon.nova-lite-v1:0`)
+- Optional: PostgreSQL 13+ (SQLite fallback works for local dev)
+- Optional: Alpha Vantage API key, ElevenLabs API key
 
-### Local Setup
+### 1. Backend
 
-#### 1. Backend
 ```bash
 cd backend
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
+python -m venv ../.venv
+source ../.venv/bin/activate
 pip install -r requirements.txt
 
-# Set environment
-export NEXT_PUBLIC_API_URL="http://localhost:8001"
-# Or create a .env file with required AWS config
-
-# Run migrations (if using PostgreSQL)
-# (Schema managed via init_schema.sql, migrations/ folder)
-
-# Start server
-uvicorn main:app --reload --host 127.0.0.1 --port 8001
+# Local dev with SQLite (no RDS needed)
+PALOOR_LOCAL_DB=1 PALOOR_BOOTSTRAP=0 \
+  uvicorn main:app --host 127.0.0.1 --port 8001
 ```
 
-#### 2. Frontend
+Server boots on `http://127.0.0.1:8001`. OpenAPI docs at `/docs`.
+
+### 2. Frontend
+
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Set environment
-export NEXT_PUBLIC_API_URL="http://127.0.0.1:8001"
-
-# Start dev server
-npm run dev
-# Opens on http://localhost:3000
+PORT=3001 NEXT_PUBLIC_API_URL=http://127.0.0.1:8001 npm run dev
 ```
 
-#### 3. Database
-```bash
-# Create PostgreSQL database
-createdb paloor_db
+App on `http://localhost:3001`.
 
-# Apply schema
-psql -U paloor_user -d paloor_db -f backend/init_schema.sql
-psql -U paloor_user -d paloor_db -f backend/init_extensions.sql
+### 3. AWS Credentials
+
+Boto3 picks up standard credential sources (`~/.aws/credentials`, env vars, IAM role). Bedrock calls use `us-east-1`.
+
+```bash
+export AWS_PROFILE=your-profile
+export AWS_REGION=us-east-1
 ```
 
 ### Environment Variables
 
-**Backend** (`.env`):
-```
-DATABASE_URL=postgresql://paloor_user:password@localhost:5432/paloor_db
-UPLOAD_BUCKET=paloor-uploads-prod
-AWS_REGION=us-east-1
-JWT_SECRET_KEY=your-secret-key
-CORS_ORIGINS=http://localhost:3000
+**Backend** (`.env` or shell):
+```bash
+DATABASE_URL=postgresql://user:pass@host:5432/paloor    # or omit + use PALOOR_LOCAL_DB=1
+JWT_SECRET_KEY=change-me
+UPLOAD_BUCKET=paloor-uploads
+ALPHA_VANTAGE_API_KEY=...
+ELEVENLABS_API_KEY=...
+CORS_ORIGINS=http://localhost:3001
 ```
 
 **Frontend** (`.env.local`):
-```
+```bash
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8001
 ```
 
-## API Reference
+---
 
-### Authentication
-- `POST /api/auth/register` - Create account
-- `POST /api/auth/login` - Get JWT token
-- `POST /api/auth/verify-email` - Verify email code
-- `PUT /api/auth/profile` - Update profile
-- `POST /api/auth/photo` - Upload user photo
+## Key Endpoints
 
-### Assets & Documents
-- `GET /api/asset-classes` - List asset classes
-- `POST /api/assets` - Create asset
-- `GET /api/assets` - List user assets
-- `POST /api/documents/{asset_id}` - Upload document
-- `GET /api/documents/{doc_id}/preview` - Preview document
-- `POST /api/account/documents` - Upload personal document
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` · `/api/auth/login` | JWT auth |
+| `POST` | `/api/chat/conversations/{id}/stream` | Streaming chat (SSE) |
+| `WS` | `/ws/chat` | Real-time chat over WebSocket |
+| `POST` | `/api/analysis` | Trigger 8-agent deep analysis |
+| `GET` | `/api/analysis/{id}` | Poll analysis status / fetch report |
+| `GET` | `/api/equities/v2/screener` | Equity discovery |
+| `GET` | `/api/equities/v2/prices/{ticker}` | OHLC history |
+| `POST` | `/api/learn/voice/tts` · `/stt` | Voice |
+| `POST` | `/api/assets/{id}/documents` | Upload + OCR via Bedrock vision |
 
-### AI & Chat
-- `POST /api/chat/start` - Start conversation
-- `POST /api/chat/{conversation_id}/message` - Send message (streams)
-- `WS /ws/chat` - WebSocket for real-time chat
-- `POST /api/memory/store` - Store memory
-- `POST /api/memory/search` - Semantic search
+Full spec: `GET /openapi.json`.
 
-### Equities & Analysis
-- `GET /api/equities/v2/search` - Search stocks
-- `GET /api/equities/v2/snapshot/{ticker}` - Get stock snapshot
-- `POST /api/analysis` - Start deep analysis (multi-agent)
-- `GET /api/portfolio/frontier` - Efficient frontier
+---
 
-### Health
-- `GET /api/health` - Financial health score
+## What's Novel
 
-## Development Workflow
+1. **Tool-intent routing across LLMs** — Gemma is amazing at teaching but can't emit Bedrock `toolUse` blocks. We detect tool-needing prompts and route them to Llama transparently. (Most teams pick one model and live with the trade-off.)
+2. **8-agent deep analysis** — Not a single LLM call. A real pipeline where Market / Technical / Fundamentals / News / Bull / Bear / Trader / Risk / Portfolio Manager each produce structured reports, debate, and converge on a verdict with confidence.
+3. **Voice-first learning** — ElevenLabs TTS streams lessons; STT lets users ask follow-ups by speaking. A global Stop-speaking button lives at the dashboard root so users can interrupt anywhere.
+4. **Personalized context everywhere** — Every Bedrock call includes the user's age, income band, net worth, risk tolerance, and goals. The risk manager agent literally argues against trades that don't fit the user's profile.
+5. **Multi-model OCR fallback** — Document uploads go Gemma → Nova → Llama. If one returns a `ValidationException`, the next runs automatically.
 
-### Running Tests
-```bash
-# Backend
-cd backend
-pytest
+---
 
-# Frontend
-cd frontend
-npm run test
-```
+## Demo
 
-### Building for Production
-```bash
-# Backend
-# (Docker Dockerfile included)
-docker build -t paloor-backend .
+Try `should I buy MSFT?` in the chat. You'll see:
+1. Tool-intent router picks Llama (skips Gemma).
+2. Llama invokes `deep_analysis(ticker="MSFT")`.
+3. Frontend shows live agent progress for ~60s.
+4. Final report with BUY/SELL/HOLD, confidence, agent breakdown, and PM metrics — all personalized to the logged-in user's profile.
 
-# Frontend
-cd frontend
-npm run build
-npm run start
-```
-
-## Staged Development Arc
-
-This codebase is organized in 5 progressive stages:
-
-1. **Foundation** — Auth, landing page, app shell
-2. **Onboarding & Dashboard** — Email verification, profile setup, basic logged-in surface
-3. **Financial Organization** — Assets, accounts, documents, linked accounts, health scoring
-4. **AI Layer** — Chat, memory, cohorts, speech transcription
-5. **Investment Intelligence** — Equities research, deep analysis, portfolio optimization
-
-Each stage builds on the previous, allowing for incremental feature rollout and testing.
-
-## Contributing
-
-- Fork the repo
-- Create a feature branch
-- Submit a PR with clear description of changes
+---
 
 ## License
 
-Proprietary — Paloor Inc.
+Proprietary — built for LA Hacks 2026.
 
-## Contact
+## Team
 
-For questions or feedback, reach out to the team.
+Aditya Venkat
