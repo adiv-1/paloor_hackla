@@ -222,9 +222,24 @@ function MarkdownMessage({ content, isAI }: { content: string; isAI: boolean }) 
           // Strong / emphasis
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           // Links
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
-          ),
+          a: ({ href, children }) => {
+            const url = String(href || "");
+            const isInternal = url.startsWith("/") && !url.startsWith("//");
+            if (isInternal) {
+              return (
+                <Link
+                  href={url}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary font-medium hover:bg-primary/20 transition no-underline"
+                >
+                  {children}
+                  <span aria-hidden className="text-[10px] opacity-70">↗</span>
+                </Link>
+              );
+            }
+            return (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:text-primary/80">{children}</a>
+            );
+          },
           // Horizontal rule
           hr: () => <hr className="my-3 border-border/50" />,
         }}

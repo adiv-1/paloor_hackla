@@ -222,8 +222,12 @@ def list_available_cohorts(life_stage: str = None) -> List[dict]:
         return results
 
 
-def join_cohort(conv_id: str, user_id: str) -> dict:
-    """Join a cohort. Assigns an anonymized display name."""
+def join_cohort(conv_id: str, user_id: str, user_consented: bool = False) -> dict:
+    """Join a cohort. Assigns an anonymized display name.
+
+    `user_consented` records that the user explicitly acknowledged the
+    information that will be shared with the wealth manager.
+    """
     with pg_cursor() as cur:
         # Verify it's a cohort and still active
         cur.execute(
@@ -268,9 +272,9 @@ def join_cohort(conv_id: str, user_id: str) -> dict:
         now = datetime.now(timezone.utc)
         cur.execute(
             """INSERT INTO conversation_members
-               (conversation_id, user_id, role, display_name, joined_at, agreed_to_terms)
-               VALUES (%s, %s, 'member', %s, %s, FALSE)""",
-            (conv_id, user_id, display_name, now),
+               (conversation_id, user_id, role, display_name, joined_at, agreed_to_terms, user_agreed_to_terms)
+               VALUES (%s, %s, 'member', %s, %s, FALSE, %s)""",
+            (conv_id, user_id, display_name, now, bool(user_consented)),
         )
 
     return {"display_name": display_name, "conversation_id": conv_id}
@@ -396,3 +400,224 @@ def expire_cohorts() -> int:
 
 def get_life_stages() -> List[dict]:
     return LIFE_STAGES
+
+
+# ---------------------------------------------------------------------------
+# Marketplace
+# ---------------------------------------------------------------------------
+
+def get_marketplace_wms() -> List[dict]:
+    """Return all active wealth managers for the public marketplace.
+
+    Includes a count of currently-open cohorts so the UI can show whether
+    the WM has a session a user can join right now.
+    """
+    with pg_cursor() as cur:
+        cur.execute(
+            """SELECT wm.id, wm.user_id, wm.firm_name, wm.license_number,
+                      wm.specializations, wm.bio, wm.is_verified, wm.avatar_url,
+                      wm.created_at,
+                      u.name AS user_name,
+                      CASE WHEN u.photo_path IS NOT NULL AND u.photo_path <> ''
+                           THEN '/api/auth/photo/' || u.id
+                           ELSE NULL
+                      END AS user_photo_url,
+                      (
+                          SELECT COUNT(*) FROM cohorts co
+                          JOIN conversations c ON co.conversation_id = c.id
+                          WHERE co.wm_id = wm.id
+                            AND co.status = 'active'
+                            AND c.expires_at > NOW()
+                      ) AS open_cohorts
+               FROM wealth_managers wm
+               JOIN users u ON wm.user_id = u.id
+               WHERE wm.is_active = TRUE
+               ORDER BY wm.is_verified DESC, wm.created_at ASC"""
+        )
+        results = []
+        for row in cur.fetchall():
+            d = dict(row)
+            d["specializations"] = d.get("specializations") or []
+            results.append(d)
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Seed data — fake wealth managers for the marketplace demo
+# ---------------------------------------------------------------------------
+
+# Stable headshots from randomuser.me (CC0, hot-linkable, predictable URLs).
+_FAKE_WMS = [
+    {
+        "name": "Mira Patel",
+        "email": "mira.patel@northpeakwealth.demo",
+        "firm_name": "North Peak Wealth Advisors",
+        "license_number": "CFP-204881",
+        "specializations": ["Early Career", "Student Loans", "First-Time Investing"],
+        "bio": "CFP® focused on helping 20- and 30-somethings turn their first paycheck into long-term wealth without the jargon.",
+        "avatar_url": "https://randomuser.me/api/portraits/women/68.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "James O'Connell",
+        "email": "james.oconnell@harborline.demo",
+        "firm_name": "Harborline Capital",
+        "license_number": "CFA-118742",
+        "specializations": ["Mid Career", "Equity Compensation", "Tech RSUs"],
+        "bio": "CFA helping mid-career tech employees navigate RSU vesting, AMT, and concentrated stock positions.",
+        "avatar_url": "https://randomuser.me/api/portraits/men/32.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Aisha Robinson",
+        "email": "aisha.robinson@cedarhill.demo",
+        "firm_name": "Cedarhill Family Office",
+        "license_number": "CFP-309115",
+        "specializations": ["Pre-Retirement", "529 Plans", "College Funding"],
+        "bio": "Helping families balance saving for retirement and putting kids through college without sacrificing either goal.",
+        "avatar_url": "https://randomuser.me/api/portraits/women/44.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Daniel Kim",
+        "email": "daniel.kim@meridianadvisory.demo",
+        "firm_name": "Meridian Advisory Group",
+        "license_number": "CFP-447203",
+        "specializations": ["Retirement Income", "Social Security", "Medicare Planning"],
+        "bio": "Specializing in retirement income strategies — Social Security timing, Medicare, and tax-efficient withdrawals.",
+        "avatar_url": "https://randomuser.me/api/portraits/men/22.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Elena Voss",
+        "email": "elena.voss@silverbirch.demo",
+        "firm_name": "Silver Birch Planning",
+        "license_number": "CFP-510337",
+        "specializations": ["Peak Earning", "Estate Planning", "Trusts"],
+        "bio": "20+ years building estate plans for high-earning professionals. Trusts, gifting strategies, generational wealth.",
+        "avatar_url": "https://randomuser.me/api/portraits/women/65.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Marcus Lee",
+        "email": "marcus.lee@bluebridge.demo",
+        "firm_name": "Bluebridge Investment Partners",
+        "license_number": "CFA-298104",
+        "specializations": ["Mid Career", "Real Estate", "Alternative Investments"],
+        "bio": "Helping clients diversify beyond stocks — real estate syndications, REITs, and private credit.",
+        "avatar_url": "https://randomuser.me/api/portraits/men/45.jpg",
+        "is_verified": False,
+    },
+    {
+        "name": "Priya Nair",
+        "email": "priya.nair@horizonpath.demo",
+        "firm_name": "Horizon Path Advisors",
+        "license_number": "CFP-612009",
+        "specializations": ["Early Career", "Side Hustles", "Crypto Basics"],
+        "bio": "Fee-only planner working with creators and freelancers. Quarterly taxes, retirement for the self-employed, sane crypto.",
+        "avatar_url": "https://randomuser.me/api/portraits/women/12.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Robert Hayes",
+        "email": "robert.hayes@stoneoak.demo",
+        "firm_name": "Stone Oak Wealth",
+        "license_number": "CFP-779441",
+        "specializations": ["Retired", "Charitable Giving", "Donor-Advised Funds"],
+        "bio": "Retired clients who want their wealth to outlive them — charitable planning, family foundations, legacy.",
+        "avatar_url": "https://randomuser.me/api/portraits/men/68.jpg",
+        "is_verified": True,
+    },
+    {
+        "name": "Sophia Alvarez",
+        "email": "sophia.alvarez@lighthousefp.demo",
+        "firm_name": "Lighthouse Financial Planning",
+        "license_number": "CFP-820556",
+        "specializations": ["Mid Career", "Divorce Planning", "Single-Income Households"],
+        "bio": "Certified Divorce Financial Analyst helping clients rebuild and protect their finances after major life changes.",
+        "avatar_url": "https://randomuser.me/api/portraits/women/33.jpg",
+        "is_verified": False,
+    },
+    {
+        "name": "Thomas Becker",
+        "email": "thomas.becker@oakcrest.demo",
+        "firm_name": "Oakcrest Capital Strategies",
+        "license_number": "CFA-905112",
+        "specializations": ["Peak Earning", "Tax-Loss Harvesting", "Concentrated Positions"],
+        "bio": "Quant-leaning advisor focused on tax-efficient portfolio construction and unwinding concentrated stock positions.",
+        "avatar_url": "https://randomuser.me/api/portraits/men/77.jpg",
+        "is_verified": True,
+    },
+]
+
+
+def seed_fake_wms() -> int:
+    """Idempotently seed the wealth_managers table with demo entries.
+
+    Creates one shadow user per WM (no usable password — just a placeholder
+    so the FK constraint is satisfied) and a corresponding wealth_manager row.
+    Returns the number of new wealth managers inserted.
+    """
+    with pg_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS cnt FROM wealth_managers")
+        existing = cur.fetchone()["cnt"]
+        if existing >= len(_FAKE_WMS):
+            return 0
+
+        inserted = 0
+        now = datetime.now(timezone.utc)
+        for wm_data in _FAKE_WMS:
+            cur.execute(
+                "SELECT id FROM users WHERE email = %s",
+                (wm_data["email"],),
+            )
+            existing_user = cur.fetchone()
+            if existing_user:
+                user_id = existing_user["id"]
+            else:
+                user_id = _gen_id("user")
+                # Hash placeholder password — these accounts are not meant for
+                # interactive login; the field exists to satisfy NOT NULL.
+                cur.execute(
+                    """INSERT INTO users (id, email, name, hashed_password, created_at,
+                                          email_verified, profile_completed)
+                       VALUES (%s, %s, %s, %s, %s, TRUE, TRUE)""",
+                    (
+                        user_id,
+                        wm_data["email"],
+                        wm_data["name"],
+                        "!seed-no-login!",
+                        now,
+                    ),
+                )
+
+            cur.execute(
+                "SELECT id FROM wealth_managers WHERE user_id = %s",
+                (user_id,),
+            )
+            if cur.fetchone():
+                continue
+
+            wm_id = _gen_id("wm")
+            cur.execute(
+                """INSERT INTO wealth_managers
+                   (id, user_id, firm_name, license_number, specializations, bio,
+                    is_verified, is_active, avatar_url, created_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)""",
+                (
+                    wm_id,
+                    user_id,
+                    wm_data["firm_name"],
+                    wm_data["license_number"],
+                    json.dumps(wm_data["specializations"]),
+                    wm_data["bio"],
+                    bool(wm_data["is_verified"]),
+                    wm_data["avatar_url"],
+                    now,
+                ),
+            )
+            inserted += 1
+
+        if inserted:
+            logger.info(f"[cohort] seeded {inserted} demo wealth managers")
+        return inserted

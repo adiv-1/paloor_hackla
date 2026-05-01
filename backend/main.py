@@ -53,11 +53,12 @@ app.add_api_websocket_route("/ws/chat", chat_websocket)
 def on_startup():
     # Apply schema + migrations synchronously (fast); seed equities universe in background.
     try:
-        from bootstrap import apply_schema, seed_companies_if_empty
+        from bootstrap import apply_schema, seed_companies_if_empty, seed_marketplace_wms
         import threading, os
         if os.getenv("PALOOR_BOOTSTRAP", "1") != "0":
             apply_schema()
             threading.Thread(target=seed_companies_if_empty, daemon=True).start()
+            threading.Thread(target=seed_marketplace_wms, daemon=True).start()
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Bootstrap failed: {e}")

@@ -77,6 +77,15 @@ def seed_companies_if_empty() -> None:
         logger.warning(f"[bootstrap] company seeding failed: {e}")
 
 
+def seed_marketplace_wms() -> None:
+    """Idempotently seed the wealth-manager marketplace with demo entries."""
+    try:
+        from chat.cohort import seed_fake_wms
+        seed_fake_wms()
+    except Exception as e:
+        logger.warning(f"[bootstrap] marketplace seeding failed: {e}")
+
+
 def run() -> None:
     """Run full bootstrap. Controlled by PALOOR_BOOTSTRAP env (default: enabled)."""
     if os.getenv("PALOOR_BOOTSTRAP", "1") == "0":
@@ -84,3 +93,4 @@ def run() -> None:
         return
     apply_schema()
     seed_companies_if_empty()
+    seed_marketplace_wms()

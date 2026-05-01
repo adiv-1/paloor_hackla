@@ -26,10 +26,11 @@ from chat.models import get_conversation_summary, list_messages, insert_message
 
 logger = logging.getLogger(__name__)
 
-# AWS Bedrock model IDs — Gemma primary (LA Hacks Google challenge)
+# AWS Bedrock model IDs — Llama 4 Maverick primary (broad tool support).
+# Gemma is dropped from the rotation: it can't invoke Bedrock tools, so it
+# can never use the navigation / Alpha Vantage / deep_analysis tools.
 MODELS = [
-    "google.gemma-3-27b-it",                         # Primary — Google challenge
-    "us.meta.llama4-maverick-17b-instruct-v1:0",     # Fallback — tool use (hybrid streaming)
+    "us.meta.llama4-maverick-17b-instruct-v1:0",     # Primary — tool use (hybrid streaming)
     "us.amazon.nova-lite-v1:0",                      # Fallback — fast, cheap, streaming+tools
 ]
 
@@ -198,7 +199,48 @@ DEEP ANALYSIS:
   • Single indicator queries ("show me MACD for TSLA") — use alpha_vantage instead
   • General financial questions not about a specific stock
 - When deep_analysis completes, present the summary and verdict clearly. Tell the user they can view the full detailed analysis with all agent reports. Include the analysis_id so the frontend can link to it.
-- The deep analysis takes 1-3 minutes because it runs multiple agents. Let the user know it's running a comprehensive analysis."""
+- The deep analysis takes 1-3 minutes because it runs multiple agents. Let the user know it's running a comprehensive analysis.
+
+PLATFORM NAVIGATION (very important):
+Paloor is a multi-page app and the user is chatting from inside it. When your
+answer naturally points the user toward another part of the platform, ALWAYS
+embed a clickable markdown link to the relevant page so they can jump there
+in one click. Use these routes verbatim:
+
+  • Learning modules            /dashboard/learning?module=<module_id>
+  • Learning hub                /dashboard/learning
+  • Wealth-manager cohorts      /dashboard/cohort
+  • Wealth-manager marketplace  /dashboard/marketplace
+  • Single equity / ticker      /dashboard/equities?ticker=<TICKER>
+  • Portfolio simulator         /dashboard/simulator
+  • Deep analysis history       /dashboard/analysis
+  • Account & profile           /dashboard/account
+
+Available tools for navigation context:
+  • list_learning_modules      — call when recommending a lesson; the response
+                                 contains the exact module IDs and URLs.
+  • find_eligible_cohorts      — call when the user wants to talk to a wealth
+                                 manager, find a peer group, or asks who else
+                                 is in their situation. Returns concrete cohort
+                                 names + a deep-link URL the user can click to
+                                 join.
+  • list_marketplace_advisors  — call when the user wants to find / connect
+                                 with a wealth manager (optionally filtered by
+                                 specialization).
+
+When presenting these results, write a short narrative answer and then add
+clickable markdown links — for example:
+  "You're a great fit for the Mid-Career cohort led by Mira Patel — 
+   [join the cohort](/dashboard/cohort)."
+  "Try the [Diversification module](/dashboard/learning?module=diversification) 
+   to see this in action."
+  "Run a what-if in the [portfolio simulator](/dashboard/simulator)."
+  "Pull up [AAPL](/dashboard/equities?ticker=AAPL) to see live data."
+
+When the user asks "what do you know about me?" or anything about themselves,
+answer directly from the USER FINANCIAL PROFILE block above — name their age,
+occupation, income range, risk tolerance, goals, and notable assets. Don't
+deflect or say you don't know if the profile is populated."""
 
 
 def _build_system_prompt(user_id: str) -> str:
@@ -404,8 +446,14 @@ async def stream_ai_response(
 
     system_list = [{"text": system_text}]
 
-    # Tool configuration (Alpha Vantage financial data + deep analysis)
+    # Tool configuration (Alpha Vantage financial data + deep analysis + navigation)
     from chat.av_tools import AV_TOOL_SPECS, execute_av_tool, format_tool_status, extract_chart_data
+    from chat.nav_tools import (
+        NAV_TOOL_SPECS,
+        NAV_TOOL_NAMES,
+        execute_nav_tool,
+        format_nav_tool_status,
+    )
 
     DEEP_ANALYSIS_TOOL = {
         "toolSpec": {
@@ -440,7 +488,7 @@ async def stream_ai_response(
         }
     }
 
-    tool_config = {"tools": AV_TOOL_SPECS + [DEEP_ANALYSIS_TOOL]}
+    tool_config = {"tools": AV_TOOL_SPECS + [DEEP_ANALYSIS_TOOL] + NAV_TOOL_SPECS}
     MAX_TOOL_ROUNDS = 5
 
     candidate_models = _select_models(user_message)
@@ -524,7 +572,10 @@ async def stream_ai_response(
                             tool_name = tu.get("name", "alpha_vantage")
                             tool_inp = tu.get("input", {})
 
-                            if tool_name == "deep_analysis":
+                            if tool_name in NAV_TOOL_NAMES:
+                                yield f"{TOOL_STATUS_PREFIX}{format_nav_tool_status(tool_name)}"
+                                result = execute_nav_tool(tool_name, tool_inp, user_id)
+                            elif tool_name == "deep_analysis":
                                 # Run multi-agent analysis
                                 analysis_ticker = tool_inp.get("ticker", "").upper()
                                 yield f"{TOOL_STATUS_PREFIX}Running deep analysis on {analysis_ticker}..."
@@ -698,7 +749,10 @@ async def stream_ai_response(
                             tool_name = tool.get("name", "alpha_vantage")
                             tool_inp = tool["input"]
 
-                            if tool_name == "deep_analysis":
+                            if tool_name in NAV_TOOL_NAMES:
+                                yield f"{TOOL_STATUS_PREFIX}{format_nav_tool_status(tool_name)}"
+                                result = execute_nav_tool(tool_name, tool_inp, user_id)
+                            elif tool_name == "deep_analysis":
                                 analysis_ticker = tool_inp.get("ticker", "").upper()
                                 yield f"{TOOL_STATUS_PREFIX}Running deep analysis on {analysis_ticker}..."
                                 yield f"{ANALYSIS_PREFIX}{json.dumps({'type': 'analysis_started', 'ticker': analysis_ticker})}"

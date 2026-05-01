@@ -119,6 +119,29 @@ function formatDateSeparator(ts: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/* Map an age to one of the cohort life-stage keys. */
+function ageToLifeStage(age?: number | null): string | null {
+  if (!age || age < 18) return null;
+  if (age < 30) return "early_career";
+  if (age < 45) return "mid_career";
+  if (age < 55) return "peak_earning";
+  if (age < 65) return "pre_retirement";
+  return "retired";
+}
+
+/* Fields shared with the wealth manager when a user joins a cohort.
+ * Kept in sync with the SELECT in `get_cohort_members` in backend/chat/cohort.py. */
+const SHARED_FIELDS: { key: string; label: string }[] = [
+  { key: "name", label: "Your real name" },
+  { key: "age", label: "Age" },
+  { key: "occupation", label: "Occupation" },
+  { key: "annual_income", label: "Annual income range" },
+  { key: "net_worth_estimate", label: "Net-worth estimate" },
+  { key: "risk_tolerance", label: "Risk tolerance" },
+  { key: "financial_goals", label: "Financial goals" },
+  { key: "state", label: "State of residence" },
+];
+
 /* ─────────────── Markdown renderer ─────────────── */
 function CohortMarkdown({ content }: { content: string }) {
   return (
@@ -188,6 +211,11 @@ export default function CohortPage() {
   const [showCreateCohort, setShowCreateCohort] = useState(false);
   const [wmAgreed, setWmAgreed] = useState<Record<string, boolean>>({});
   const [filterStage, setFilterStage] = useState<string>("");
+
+  /* ── consent modal state (for joining a cohort) ── */
+  const [pendingJoin, setPendingJoin] = useState<AvailableCohort | null>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -294,9 +322,10 @@ export default function CohortPage() {
   };
 
   /* ── join cohort ── */
-  const joinCohort = async (convId: string) => {
+  const joinCohort = async (convId: string, consented: boolean) => {
     const res = await apiFetch(`${API}/api/cohort/${convId}/join`, {
       method: "POST",
+      body: JSON.stringify({ user_consented: consented }),
     });
     if (res) {
       const data = await res.json();
@@ -305,6 +334,19 @@ export default function CohortPage() {
         openCohort(data.conversation);
       }
     }
+  };
+
+  /* ── start join flow: show consent modal first ── */
+  const requestJoin = (cohort: AvailableCohort) => {
+    setConsentChecked(false);
+    setPendingJoin(cohort);
+  };
+
+  const confirmJoin = async () => {
+    if (!pendingJoin || !consentChecked) return;
+    const target = pendingJoin;
+    setPendingJoin(null);
+    await joinCohort(target.conversation_id, true);
   };
 
   /* ── agree to terms (WM) ── */
@@ -572,6 +614,51 @@ export default function CohortPage() {
           ) : sidebarView === "browse" ? (
             /* ── Browse Available Cohorts ── */
             <div className="p-2">
+              {/* AI life-stage recommendation */}
+              {(() => {
+                const suggested = ageToLifeStage(user?.age ?? null);
+                if (
+                  !suggested ||
+                  bannerDismissed ||
+                  filterStage === suggested
+                )
+                  return null;
+                const stageLabel =
+                  lifeStages.find((s) => s.key === suggested)?.label ??
+                  suggested;
+                return (
+                  <div className="mb-3 p-2.5 rounded-lg border border-violet-300/40 bg-violet-50 dark:bg-violet-950/40">
+                    <div className="flex items-start gap-2">
+                      <Bot className="h-3.5 w-3.5 text-violet-600 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium text-violet-700 dark:text-violet-300 leading-snug">
+                          AI suggestion
+                        </p>
+                        <p className="text-[11px] text-foreground/80 mt-0.5 leading-snug">
+                          Based on your profile, you&apos;re a great fit for{" "}
+                          <span className="font-medium">{stageLabel}</span>{" "}
+                          cohorts.
+                        </p>
+                        <div className="flex gap-2 mt-1.5">
+                          <button
+                            onClick={() => setFilterStage(suggested)}
+                            className="text-[10px] px-2 py-0.5 rounded bg-violet-600 text-white hover:bg-violet-700"
+                          >
+                            Show these
+                          </button>
+                          <button
+                            onClick={() => setBannerDismissed(true)}
+                            className="text-[10px] px-2 py-0.5 rounded text-muted-foreground hover:text-foreground"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Life stage filter */}
               <div className="mb-3">
                 <select
@@ -1206,6 +1293,79 @@ export default function CohortPage() {
             </div>
           </div>
         )}
+
+      {/* Join Cohort Consent Modal */}
+      {pendingJoin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-xl border border-border shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-violet-50 dark:bg-violet-950 flex items-center justify-center">
+                <Eye className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Before you join</h3>
+                <p className="text-xs text-muted-foreground">
+                  {pendingJoin.wm_name}
+                  {pendingJoin.firm_name && ` • ${pendingJoin.firm_name}`}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-3">
+              Other members will only see your anonymized handle (e.g.{" "}
+              <span className="font-medium">Investor Alpha</span>). Your wealth
+              manager will see the following profile information from your
+              account so they can give you relevant guidance:
+            </p>
+
+            <div className="bg-accent/50 rounded-lg p-3 mb-4">
+              <ul className="text-xs space-y-1.5">
+                {SHARED_FIELDS.map((f) => (
+                  <li key={f.key} className="flex items-start gap-2">
+                    <CheckCircle className="h-3 w-3 text-emerald-600 mt-0.5 shrink-0" />
+                    <span>{f.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground mb-4">
+              The wealth manager has separately agreed not to use this
+              information outside the cohort or contact you off-platform. You
+              can leave the cohort at any time.
+            </p>
+
+            <label className="flex items-start gap-2 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-xs">
+                I understand and consent to sharing the information above with
+                this wealth manager.
+              </span>
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingJoin(null)}
+                className="flex-1 py-2 rounded-md border border-border text-sm hover:bg-accent transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmJoin}
+                disabled={!consentChecked}
+                className="flex-1 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-30"
+              >
+                Join Cohort
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

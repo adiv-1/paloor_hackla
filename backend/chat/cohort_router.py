@@ -35,6 +35,7 @@ from chat.cohort import (
     list_wm_cohorts,
     expire_cohorts,
     get_life_stages,
+    get_marketplace_wms,
 )
 from chat.models import (
     get_conversation,
@@ -82,6 +83,10 @@ class CohortMessageRequest(BaseModel):
     content: str
 
 
+class JoinCohortRequest(BaseModel):
+    user_consented: bool = False
+
+
 class AgreeTermsRequest(BaseModel):
     pass
 
@@ -119,6 +124,12 @@ def get_my_wm_profile(user: UserInfo = Depends(get_current_user)):
 def check_wm_status(user: UserInfo = Depends(get_current_user)):
     """Check if current user is a wealth manager."""
     return {"is_wealth_manager": is_wealth_manager(user.id)}
+
+
+@router.get("/marketplace")
+def get_marketplace():
+    """Public marketplace listing of all active wealth managers."""
+    return get_marketplace_wms()
 
 
 # ---------------------------------------------------------------------------
@@ -177,10 +188,19 @@ def get_wm_cohorts(user: UserInfo = Depends(get_current_user)):
 
 
 @router.post("/{conv_id}/join")
-def join_cohort_endpoint(conv_id: str, user: UserInfo = Depends(get_current_user)):
-    """Join a cohort. Gets assigned an anonymized display name."""
+def join_cohort_endpoint(
+    conv_id: str,
+    req: JoinCohortRequest | None = None,
+    user: UserInfo = Depends(get_current_user),
+):
+    """Join a cohort. Gets assigned an anonymized display name.
+
+    Body (optional): {"user_consented": true} records that the user
+    explicitly acknowledged what data will be shared with the wealth manager.
+    """
+    consented = bool(req.user_consented) if req is not None else False
     try:
-        result = join_cohort(conv_id, user.id)
+        result = join_cohort(conv_id, user.id, user_consented=consented)
         # Insert system message
         insert_message(
             conversation_id=conv_id,

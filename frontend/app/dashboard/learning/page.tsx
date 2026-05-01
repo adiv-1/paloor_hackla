@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { LessonEngine } from "@/components/lesson/LessonEngine";
 import { RETURNS_MODULE } from "@/lib/modules/returns";
@@ -22,6 +23,7 @@ interface ProgressItem {
 
 export default function LearningPage() {
   const { token } = useAuth();
+  const searchParams = useSearchParams();
   const [active, setActive] = useState<LessonModule | null>(null);
   const [progress, setProgress] = useState<ProgressItem[]>([]);
   const [credits, setCredits] = useState(0);
@@ -43,6 +45,14 @@ export default function LearningPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Deep-link support: ?module=<id> opens the module directly (e.g. from chat).
+  useEffect(() => {
+    const moduleId = searchParams?.get("module");
+    if (!moduleId) return;
+    const found = MODULES.find((m) => m.id === moduleId);
+    if (found && !active) setActive(found);
+  }, [searchParams, active]);
 
   function getProgressFor(moduleId: string): ProgressItem | undefined {
     return progress.find((p) => p.module_id === moduleId);

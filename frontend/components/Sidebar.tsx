@@ -39,11 +39,12 @@ const NAV: { href: string; label: string; icon: typeof BarChart3 }[] = [
   { href: "/dashboard/simulator", label: "Simulator", icon: Activity },
   { href: "/dashboard/equities", label: "Equities", icon: TrendingUp },
   { href: "/dashboard/analysis", label: "Analysis", icon: Activity },
+  { href: "/dashboard/cohort", label: "Cohorts", icon: UserCheck },
+  { href: "/dashboard/marketplace", label: "Marketplace", icon: Search },
   { href: "/dashboard/account", label: "Account", icon: User },
 ];
 
 const COMING_SOON: { label: string; icon: typeof BarChart3; href?: string }[] = [
-  { label: "Cohorts", icon: UserCheck, href: "/dashboard/cohort" },
   { label: "Portfolio", icon: BarChart3, href: "/dashboard/portfolio" },
   { label: "Spending", icon: Wallet, href: "/dashboard/spending" },
   { label: "Tax Planning", icon: Receipt },

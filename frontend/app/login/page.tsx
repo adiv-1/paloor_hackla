@@ -5,6 +5,8 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 function getNextRoute(user: any): string {
   if (user?.email !== "admin" && user?.email_verified === false) {
     return "/verify-email";
@@ -25,6 +27,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Wealth manager registration extras
+  const [isWM, setIsWM] = useState(false);
+  const [wmFirm, setWmFirm] = useState("");
+  const [wmLicense, setWmLicense] = useState("");
+  const [wmSpecs, setWmSpecs] = useState("");
+  const [wmBio, setWmBio] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -37,15 +46,56 @@ export default function LoginPage() {
       err = await login(email, password);
     }
 
-    setSubmitting(false);
     if (err) {
+      setSubmitting(false);
       setError(err);
-    } else {
-      // Read the user from localStorage since state may not have updated yet
-      const savedUser = localStorage.getItem("paloor_user");
-      const u = savedUser ? JSON.parse(savedUser) : null;
-      router.push(getNextRoute(u));
+      return;
     }
+
+    // If signing up as a wealth manager, register WM profile now using the
+    // freshly issued token. Failures here are surfaced but don't block login.
+    if (mode === "register" && isWM) {
+      try {
+        const token = localStorage.getItem("paloor_token");
+        const res = await fetch(`${API}/api/cohort/wm/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            firm_name: wmFirm.trim(),
+            license_number: wmLicense.trim(),
+            specializations: wmSpecs
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            bio: wmBio.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          setSubmitting(false);
+          setError(
+            (detail && detail.detail) ||
+              "Account created, but wealth-manager registration failed.",
+          );
+          return;
+        }
+      } catch {
+        setSubmitting(false);
+        setError(
+          "Account created, but wealth-manager registration failed (network).",
+        );
+        return;
+      }
+    }
+
+    setSubmitting(false);
+    // Read the user from localStorage since state may not have updated yet
+    const savedUser = localStorage.getItem("paloor_user");
+    const u = savedUser ? JSON.parse(savedUser) : null;
+    router.push(getNextRoute(u));
   };
 
   const handleDemo = async () => {
@@ -119,6 +169,85 @@ export default function LoginPage() {
               className="w-full px-3 py-2.5 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
+
+          {mode === "register" && (
+            <div className="pt-1">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isWM}
+                  onChange={(e) => setIsWM(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm">
+                  I&apos;m signing up as a{" "}
+                  <span className="font-medium">wealth manager</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Adds your profile to the Paloor advisor marketplace.
+                  </span>
+                </span>
+              </label>
+
+              {isWM && (
+                <div className="mt-3 space-y-3 p-3 border border-border rounded-md bg-accent/30">
+                  <div>
+                    <label className="text-xs font-medium mb-1 block">
+                      Firm name
+                    </label>
+                    <input
+                      type="text"
+                      value={wmFirm}
+                      onChange={(e) => setWmFirm(e.target.value)}
+                      placeholder="e.g. Northstar Wealth"
+                      className="w-full px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1 block">
+                      License number{" "}
+                      <span className="text-muted-foreground">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={wmLicense}
+                      onChange={(e) => setWmLicense(e.target.value)}
+                      placeholder="CRD #123456"
+                      className="w-full px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1 block">
+                      Specializations
+                      <span className="text-muted-foreground">
+                        {" "}
+                        (comma-separated)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={wmSpecs}
+                      onChange={(e) => setWmSpecs(e.target.value)}
+                      placeholder="Retirement, Tax, ESG"
+                      className="w-full px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1 block">
+                      Short bio
+                    </label>
+                    <textarea
+                      value={wmBio}
+                      onChange={(e) => setWmBio(e.target.value)}
+                      placeholder="Tell members what you specialize in…"
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={submitting}
