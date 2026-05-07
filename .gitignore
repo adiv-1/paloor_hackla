@@ -229,3 +229,6 @@ out/
 
 # Backend uploads (local dev)
 backend/uploads/
+
+# Cursor / Project-specific
+AGENTS.md
