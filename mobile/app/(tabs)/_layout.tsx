@@ -1,14 +1,10 @@
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
-import { colors } from "../../lib/theme";
-
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.6 }}>{label}</Text>
-  );
-}
+import { useTheme } from "../../lib/theme";
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
@@ -17,37 +13,84 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+          paddingBottom: 4,
+          paddingTop: 4,
+          height: 56,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
         name="chat"
         options={{
           title: "Chat",
-          tabBarIcon: ({ focused }) => <TabIcon label="💬" focused={focused} />,
+          headerShown: false,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? "chatbubbles" : "chatbubbles-outline"}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="learn"
         options={{
           title: "Learn",
-          tabBarIcon: ({ focused }) => <TabIcon label="📚" focused={focused} />,
+          headerShown: false,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? "book" : "book-outline"}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="research"
         options={{
           title: "Research",
-          tabBarIcon: ({ focused }) => <TabIcon label="📈" focused={focused} />,
+          headerShown: false,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? "trending-up" : "trending-up-outline"}
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="cohorts"
+        options={{
+          title: "Groups",
+          headerShown: false,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? "people" : "people-outline"}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ focused }) => <TabIcon label="👤" focused={focused} />,
+          headerShown: false,
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? "person-circle" : "person-circle-outline"}
+              size={22}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>

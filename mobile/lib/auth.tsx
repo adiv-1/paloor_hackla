@@ -48,6 +48,8 @@ interface AuthResponse {
   user: User;
 }
 
+const AUTHENTICATED_ROUTES = ["(tabs)", "lesson"];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -74,13 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  // Route guard: redirect based on auth state.
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === "(tabs)";
+    const inAllowedRoute = AUTHENTICATED_ROUTES.includes(segments[0] as string);
+
     if (!token && inAuthGroup) {
       router.replace("/login");
-    } else if (token && !inAuthGroup && segments[0] !== undefined && segments[0] !== "(tabs)") {
+    } else if (
+      token &&
+      !inAllowedRoute &&
+      segments[0] !== undefined
+    ) {
       router.replace("/(tabs)/chat");
     }
   }, [loading, token, segments, router]);
@@ -92,31 +99,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
-  const login = useCallback<AuthState["login"]>(async (email, password) => {
-    try {
-      const data = await api<AuthResponse>("/api/auth/login", {
-        method: "POST",
-        json: { email, password },
-      });
-      await persist(data.access_token, data.user);
-      return null;
-    } catch (e) {
-      return e instanceof Error ? e.message : "Login failed";
-    }
-  }, [persist]);
+  const login = useCallback<AuthState["login"]>(
+    async (email, password) => {
+      try {
+        const data = await api<AuthResponse>("/api/auth/login", {
+          method: "POST",
+          json: { email, password },
+        });
+        await persist(data.access_token, data.user);
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : "Login failed";
+      }
+    },
+    [persist],
+  );
 
-  const register = useCallback<AuthState["register"]>(async (email, password, name) => {
-    try {
-      const data = await api<AuthResponse>("/api/auth/register", {
-        method: "POST",
-        json: { email, password, name },
-      });
-      await persist(data.access_token, data.user);
-      return null;
-    } catch (e) {
-      return e instanceof Error ? e.message : "Registration failed";
-    }
-  }, [persist]);
+  const register = useCallback<AuthState["register"]>(
+    async (email, password, name) => {
+      try {
+        const data = await api<AuthResponse>("/api/auth/register", {
+          method: "POST",
+          json: { email, password, name },
+        });
+        await persist(data.access_token, data.user);
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : "Registration failed";
+      }
+    },
+    [persist],
+  );
 
   const logout = useCallback(async () => {
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
