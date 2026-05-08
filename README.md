@@ -1,10 +1,8 @@
-# Paloor — Your AI Finance Pal
+# Paloor — AI-Native Personal Finance Platform
 
 > Learn finance from first principles, practice in a risk-free simulator, and research stocks with a multi-agent AI team — all in one place.
 
 Paloor makes personal finance approachable for people who feel locked out of the jargon. It pairs an AI tutor with a portfolio simulator and a deep-research engine so users can move from "what is a stock?" to running an 8-agent investment analysis without leaving the app.
-
-Built for **LA Hacks 2026** — Google challenge track (Gemma 3 27B as the primary LLM) on the AWS Bedrock multi-model stack.
 
 ---
 
@@ -12,9 +10,9 @@ Built for **LA Hacks 2026** — Google challenge track (Gemma 3 27B as the prima
 
 | Pillar | What it does |
 | --- | --- |
-| 📚 **LEARN** | Structured curriculum from "what is a stock?" to portfolio theory. Voice-first lessons (ElevenLabs TTS + STT), AI tutor explanations, progress tracking. |
-| 🎮 **PRACTICE** | Risk-free trading simulator on synthetic prices. Apply lessons immediately, make mistakes that don't cost real money. |
-| 🔬 **RESEARCH** | AI-powered stock discovery and deep analysis. Eight specialist agents (Market, Technical, Fundamentals, News, Bull/Bear, Trader, Risk, Portfolio Manager) collaborate on a BUY / SELL / HOLD verdict. |
+| **LEARN** | Structured curriculum from "what is a stock?" to portfolio theory. Voice-first lessons (ElevenLabs TTS + STT), AI tutor explanations, progress tracking. |
+| **PRACTICE** | Risk-free trading simulator on synthetic prices. Apply lessons immediately, make mistakes that don't cost real money. |
+| **RESEARCH** | AI-powered stock discovery and deep analysis. Eight specialist agents (Market, Technical, Fundamentals, News, Bull/Bear, Trader, Risk, Portfolio Manager) collaborate on a BUY / SELL / HOLD verdict. |
 
 Plus an **always-on AI helper** — voice + text — that knows the user's age, income, risk tolerance, and goals.
 
@@ -39,16 +37,16 @@ Plus an **always-on AI helper** — voice + text — that knows the user's age, 
         └──────────────┘ └─────────┘ └──────────────┘ └──────────┘
 ```
 
-### Multi-Model Routing (the secret sauce)
+### Multi-Model Routing
 
 Different prompts go to different models based on intent:
 
-- **Plain Q&A** ("what is a P/E ratio?") → **Gemma 3 27B** (Google challenge primary)
+- **Plain Q&A** ("what is a P/E ratio?") → **Gemma 3 27B** (primary conversational model)
 - **Tool-using prompts** ("should I buy MSFT?", "RSI for AAPL") → **Llama 4 Maverick** (supports Bedrock Converse `toolUse`)
 - **Image OCR** (uploaded statements, IDs) → **Gemma 3 27B vision** with Llama / Nova fallback
 - **Fast streaming** with tools → **Amazon Nova Lite**
 
-A heuristic regex (`_TOOL_INTENT_RE` in [backend/chat/ai_service.py](backend/chat/ai_service.py)) detects when a prompt needs tool execution and skips Gemma in favor of a tool-capable model. Plain conversational queries still hit Gemma so the Google challenge story stays intact.
+A heuristic router in the backend detects when a prompt needs tool execution and selects the appropriate model. Conversational queries stay on Gemma for the best teaching experience.
 
 ---
 
@@ -56,7 +54,8 @@ A heuristic regex (`_TOOL_INTENT_RE` in [backend/chat/ai_service.py](backend/cha
 
 **Backend** — FastAPI · Python 3.10 · PostgreSQL (RDS) / SQLite fallback · AWS Bedrock Converse API · Alpha Vantage · ElevenLabs · Boto3
 **Frontend** — Next.js 16 (Turbopack) · React 19 · TypeScript · Tailwind CSS · shadcn/ui
-**Infra** — AWS CDK (TypeScript) · ECR + Fargate · RDS Postgres · S3 · Secrets Manager
+**Mobile** — React Native · Expo SDK 54 · SSE streaming · Ionicons
+**Infra** — AWS CDK (TypeScript) · App Runner · RDS Postgres · S3 · Secrets Manager
 **AI** — Google Gemma 3 27B · Meta Llama 4 Maverick 17B · Amazon Nova Lite · ElevenLabs Bella (voice)
 
 ---
@@ -64,7 +63,7 @@ A heuristic regex (`_TOOL_INTENT_RE` in [backend/chat/ai_service.py](backend/cha
 ## Repository Layout
 
 ```
-paloor_hackla/
+paloor/
 ├── backend/                    FastAPI service (149 routes)
 │   ├── chat/                   AI chat, multi-model routing, deep analysis
 │   │   ├── ai_service.py       Bedrock orchestration + tool-intent routing
@@ -72,22 +71,28 @@ paloor_hackla/
 │   │   ├── av_tools.py         Alpha Vantage tool specs for Converse
 │   │   └── websocket.py        Real-time streaming chat
 │   ├── equities/               Stock data, screener, ratios, news, filings
+│   ├── learn/                  Voice-first lesson engine + progress tracking
 │   ├── assets/                 Document OCR via Bedrock vision
 │   ├── memory/                 Embedding-backed semantic recall
 │   ├── portfolio/              Efficient-frontier solver
 │   ├── speech.py               Voice (ElevenLabs)
 │   └── main.py                 FastAPI entrypoint
-├── frontend/                   Next.js 16 app
+├── frontend/                   Next.js 16 web app
 │   ├── app/dashboard/          Authenticated surface
 │   │   ├── learning/           LEARN pillar — courses + voice tutor
 │   │   ├── simulator/          PRACTICE pillar — risk-free trading
 │   │   ├── equities/           RESEARCH pillar — discovery + deep analysis
 │   │   ├── analysis/           Multi-agent report viewer
-│   │   ├── chat/               AI conversations
-│   │   └── account/            Profile, AI prefs, assessment
-│   ├── components/             Shared UI (AIHelper, StopSpeakingButton, …)
-│   └── lib/                    Auth, voice, API client
-└── infra/                      AWS CDK stack
+│   │   ├── chat/               AI conversations + group chats
+│   │   ├── cohort/             Wealth manager cohorts + marketplace
+│   │   └── account/            Profile, AI prefs, risk assessment
+│   ├── components/             Shared UI (AIHelper, Sidebar, Spotlight, …)
+│   └── lib/                    Auth, voice, modules, utilities
+├── mobile/                     React Native + Expo mobile app
+│   ├── app/(tabs)/             Chat, Learn, Research, Groups, Profile
+│   ├── app/lesson.tsx          Interactive lesson detail view
+│   └── lib/                    API client, auth, theme (light/dark)
+└── infra/                      AWS CDK deployment stacks
 ```
 
 ---
@@ -126,7 +131,17 @@ PORT=3001 NEXT_PUBLIC_API_URL=http://127.0.0.1:8001 npm run dev
 
 App on `http://localhost:3001`.
 
-### 3. AWS Credentials
+### 3. Mobile
+
+```bash
+cd mobile
+npm install
+EXPO_PUBLIC_API_URL=https://api.paloor.com npx expo start
+```
+
+Scan the QR code with Expo Go (Android/iOS) or press `a` to launch on an Android emulator.
+
+### 4. AWS Credentials
 
 Boto3 picks up standard credential sources (`~/.aws/credentials`, env vars, IAM role). Bedrock calls use `us-east-1`.
 
@@ -172,13 +187,14 @@ Full spec: `GET /openapi.json`.
 
 ---
 
-## What's Novel
+## What Makes Paloor Different
 
-1. **Tool-intent routing across LLMs** — Gemma is amazing at teaching but can't emit Bedrock `toolUse` blocks. We detect tool-needing prompts and route them to Llama transparently. (Most teams pick one model and live with the trade-off.)
-2. **8-agent deep analysis** — Not a single LLM call. A real pipeline where Market / Technical / Fundamentals / News / Bull / Bear / Trader / Risk / Portfolio Manager each produce structured reports, debate, and converge on a verdict with confidence.
-3. **Voice-first learning** — ElevenLabs TTS streams lessons; STT lets users ask follow-ups by speaking. A global Stop-speaking button lives at the dashboard root so users can interrupt anywhere.
-4. **Personalized context everywhere** — Every Bedrock call includes the user's age, income band, net worth, risk tolerance, and goals. The risk manager agent literally argues against trades that don't fit the user's profile.
-5. **Multi-model OCR fallback** — Document uploads go Gemma → Nova → Llama. If one returns a `ValidationException`, the next runs automatically.
+1. **Tool-intent routing across LLMs** — Gemma excels at teaching but can't emit Bedrock `toolUse` blocks. We detect tool-needing prompts and route them to Llama transparently, giving users the best of both models without any manual switching.
+2. **8-agent deep analysis** — Not a single LLM call. A real pipeline where Market / Technical / Fundamentals / News / Bull / Bear / Trader / Risk / Portfolio Manager each produce structured reports, debate, and converge on a verdict with confidence scores.
+3. **Voice-first learning** — ElevenLabs TTS streams lessons; STT lets users ask follow-ups by speaking. A global interrupt button lives at the dashboard root so users can stop playback anywhere.
+4. **Personalized context everywhere** — Every Bedrock call includes the user's demographics, risk tolerance, and goals. The risk manager agent literally argues against trades that don't fit the user's profile.
+5. **Multi-model OCR fallback** — Document uploads go Gemma → Nova → Llama. If one returns an error, the next runs automatically.
+6. **Cross-platform** — Full-featured web app and native mobile app sharing the same backend, with light/dark mode and SSE streaming on both.
 
 ---
 
@@ -194,8 +210,8 @@ Try `should I buy MSFT?` in the chat. You'll see:
 
 ## License
 
-Proprietary — built for LA Hacks 2026.
+Copyright © 2026 Paloor. All rights reserved.
 
-## Team
+## Founder
 
 Aditya Venkat
